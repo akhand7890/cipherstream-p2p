@@ -257,8 +257,11 @@ export class P2PTransferManager {
     if (!this.dataChannel) return;
     this.dataChannel.binaryType = 'arraybuffer';
 
-    this.dataChannel.onopen = () => {
+    this.dataChannel.onopen = async () => {
       console.log('[P2P] WebRTC DataChannel Opened & Ready!');
+      if (this.isSender && this.pendingFile && this.aesKey) {
+        await this.startChunkedTransfer(this.pendingFile, this.onProgressCallback);
+      }
     };
 
     this.dataChannel.onmessage = async (event) => {
@@ -297,12 +300,26 @@ export class P2PTransferManager {
 
   /**
    * @param {File} file
-   * @param {(progress: import('@cipherstream/types').TransferProgress) => void} onProgress
+   * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
    */
   async sendFile(file, onProgress) {
-    if (!this.dataChannel || !this.aesKey) return;
-    this.onProgressCallback = onProgress;
+    this.pendingFile = file;
+    if (onProgress) this.onProgressCallback = onProgress;
 
+    if (!this.dataChannel || this.dataChannel.readyState !== 'open' || !this.aesKey) {
+      console.log('[P2P] WebRTC DataChannel queued file; waiting for peer join & channel open.');
+      return;
+    }
+
+    await this.startChunkedTransfer(file, onProgress);
+  }
+
+  /**
+   * @param {File} file
+   * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
+   */
+  async startChunkedTransfer(file, onProgress) {
+    if (!this.dataChannel || !this.aesKey) return;
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     /** @type {import('@cipherstream/types').FileMetadata} */
     const metadata = {
@@ -340,7 +357,7 @@ export class P2PTransferManager {
       const elapsedSec = (Date.now() - startTime) / 1000 || 0.1;
       const speedBps = bytesSent / elapsedSec;
 
-      onProgress({
+      onProgress?.({
         fileId: metadata.fileId,
         bytesTransferred: bytesSent,
         totalBytes: file.size,
