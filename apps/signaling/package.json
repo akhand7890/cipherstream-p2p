@@ -1,0 +1,22 @@
+{
+  "name": "@cipherstream/signaling",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/main.js",
+    "start": "node src/main.js",
+    "build": "node -e \"console.log('Signaling JS build complete')\""
+  },
+  "dependencies": {
+    "@cipherstream/types": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/websockets": "^11.0.0",
+    "@nestjs/platform-ws": "^11.0.0",
+    "ws": "^8.18.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  }
+}
