@@ -1,0 +1,17 @@
+{
+  "name": "cipherstream-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Zero-Cloud E2EE Peer-to-Peer File Sharing Platform (JavaScript + JSDoc)",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{js,jsx,md}\""
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "prettier": "^3.5.0"
+  },
+  "packageManager": "pnpm@11.21.0"
+}
