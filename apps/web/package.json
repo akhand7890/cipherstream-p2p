@@ -1,0 +1,28 @@
+{
+  "name": "@cipherstream/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@cipherstream/types": "workspace:*",
+    "@cipherstream/crypto": "workspace:*",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.475.0",
+    "qrcode.react": "^4.2.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.1"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/postcss": "^4.0.0",
+    "postcss": "^8.5.1"
+  }
+}
