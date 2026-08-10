@@ -174,6 +174,8 @@ export class P2PTransferManager {
             })
           );
           this.initWebRTCPeer(false);
+        } else {
+          this.tryStartPendingTransfer();
         }
         break;
 
@@ -259,9 +261,7 @@ export class P2PTransferManager {
 
     this.dataChannel.onopen = async () => {
       console.log('[P2P] WebRTC DataChannel Opened & Ready!');
-      if (this.isSender && this.pendingFile && this.aesKey) {
-        await this.startChunkedTransfer(this.pendingFile, this.onProgressCallback);
-      }
+      this.tryStartPendingTransfer();
     };
 
     this.dataChannel.onmessage = async (event) => {
@@ -298,6 +298,20 @@ export class P2PTransferManager {
     };
   }
 
+  tryStartPendingTransfer() {
+    if (
+      this.isSender &&
+      this.pendingFile &&
+      this.aesKey &&
+      this.dataChannel &&
+      this.dataChannel.readyState === 'open' &&
+      !this.isTransferring
+    ) {
+      this.isTransferring = true;
+      this.startChunkedTransfer(this.pendingFile, this.onProgressCallback);
+    }
+  }
+
   /**
    * @param {File} file
    * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
@@ -305,13 +319,7 @@ export class P2PTransferManager {
   async sendFile(file, onProgress) {
     this.pendingFile = file;
     if (onProgress) this.onProgressCallback = onProgress;
-
-    if (!this.dataChannel || this.dataChannel.readyState !== 'open' || !this.aesKey) {
-      console.log('[P2P] WebRTC DataChannel queued file; waiting for peer join & channel open.');
-      return;
-    }
-
-    await this.startChunkedTransfer(file, onProgress);
+    this.tryStartPendingTransfer();
   }
 
   /**
