@@ -272,7 +272,7 @@ export class P2PTransferManager {
           this.receivedBuffers = [];
         }
       } else if (event.data instanceof ArrayBuffer) {
-        const decrypted = await decryptChunk(event.data, '', this.aesKey);
+        const decrypted = await decryptChunk(event.data, this.aesKey);
         this.receivedBuffers.push(decrypted);
 
         if (this.currentMetadata && this.onProgressCallback) {
@@ -349,7 +349,7 @@ export class P2PTransferManager {
       const start = i * CHUNK_SIZE;
       const end = Math.min(file.size, start + CHUNK_SIZE);
       const chunkBuffer = await file.slice(start, end).arrayBuffer();
-      const { encryptedBuffer } = await encryptChunk(chunkBuffer, this.aesKey);
+      const encryptedBuffer = await encryptChunk(chunkBuffer, this.aesKey);
 
       this.dataChannel.send(encryptedBuffer);
       bytesSent += (end - start);

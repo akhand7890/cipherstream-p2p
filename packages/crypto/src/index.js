@@ -89,10 +89,11 @@ export async function deriveSharedAESKey(ownPrivateKey, peerPublicKey) {
 }
 
 /**
- * Encrypt a binary file chunk using AES-256-GCM with a unique 96-bit IV
+ * Encrypt a binary file chunk using AES-256-GCM with a unique 96-bit IV.
+ * Prepends the 12-byte IV directly to the front of the payload.
  * @param {ArrayBuffer} chunkData
  * @param {CryptoKey} aesKey
- * @returns {Promise<{ encryptedBuffer: ArrayBuffer, ivBase64: string }>}
+ * @returns {Promise<ArrayBuffer>}
  */
 export async function encryptChunk(chunkData, aesKey) {
   const iv = window.crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV
@@ -105,26 +106,30 @@ export async function encryptChunk(chunkData, aesKey) {
     chunkData
   );
 
-  const ivBase64 = arrayBufferToBase64(iv.buffer);
-  return { encryptedBuffer, ivBase64 };
+  const combined = new Uint8Array(12 + encryptedBuffer.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encryptedBuffer), 12);
+  return combined.buffer;
 }
 
 /**
- * Decrypt an encrypted binary chunk using AES-256-GCM
- * @param {ArrayBuffer} encryptedBuffer
- * @param {string} ivBase64
+ * Decrypt an encrypted binary chunk using AES-256-GCM.
+ * Extracts the 12-byte IV from the front of the packet.
+ * @param {ArrayBuffer} packetBuffer
  * @param {CryptoKey} aesKey
  * @returns {Promise<ArrayBuffer>}
  */
-export async function decryptChunk(encryptedBuffer, ivBase64, aesKey) {
-  const ivBuffer = base64ToArrayBuffer(ivBase64);
+export async function decryptChunk(packetBuffer, aesKey) {
+  const iv = new Uint8Array(packetBuffer.slice(0, 12));
+  const encryptedData = packetBuffer.slice(12);
+
   return await window.crypto.subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv: new Uint8Array(ivBuffer),
+      iv,
     },
     aesKey,
-    encryptedBuffer
+    encryptedData
   );
 }
 
