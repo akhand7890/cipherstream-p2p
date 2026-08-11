@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Lock } from 'lucide-react';
 
 /**
  * @param {Object} props
- * @param {(code: string) => void} props.onJoinSession
+ * @param {(code: string, pin?: string) => void} props.onJoinSession
  * @param {boolean} props.isLoading
  */
 export const ReceiverView = ({ onJoinSession, isLoading }) => {
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [pin, setPin] = useState('');
 
   /**
    * @param {number} index
@@ -46,7 +47,7 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (fullCode.length === 6) {
-      onJoinSession(fullCode);
+      onJoinSession(fullCode, pin);
     }
   };
 
@@ -77,6 +78,22 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
               className="w-14 h-16 text-center text-3xl font-extrabold font-mono bg-slate-900/90 text-indigo-400 border border-slate-700/80 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none transition shadow-inner"
             />
           ))}
+        </div>
+
+        {/* Optional Security PIN Input */}
+        <div className="max-w-xs mx-auto space-y-1 text-center pt-2">
+          <label className="text-xs font-semibold text-slate-400 flex items-center justify-center gap-1.5">
+            <Lock className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Optional Security PIN (if set by sender)</span>
+          </label>
+          <input
+            type="text"
+            maxLength={4}
+            placeholder="e.g. 4829"
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            className="w-full px-3 py-2 text-center rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+          />
         </div>
 
         <button

@@ -6,6 +6,7 @@ import {
   decryptChunk,
 } from '@cipherstream/crypto';
 import { SignalingEventType } from '@cipherstream/types';
+import { audioSynth } from './audio';
 
 const CHUNK_SIZE = 64 * 1024; // 64KB chunks
 const BUFFER_HIGH_WATERMARK = 1024 * 1024; // 1MB backpressure threshold
@@ -32,15 +33,17 @@ export class P2PTransferManager {
 
     /** @type {string} */
     this.roomId = '';
-    /** @type {boolean} */
     this.isSender = false;
-    /** @type {boolean} */
     this.isThrottled = false;
+    this.pin = '';
+    this.autoDestruct = false;
 
     /** @type {((progress: import('@cipherstream/types').TransferProgress) => void) | undefined} */
     this.onProgressCallback = undefined;
     /** @type {((blob: Blob, metadata: import('@cipherstream/types').FileMetadata) => void) | undefined} */
     this.onFileReceivedCallback = undefined;
+    /** @type {((errorMsg: string) => void) | undefined} */
+    this.onErrorCallback = undefined;
 
     /** @type {ArrayBuffer[]} */
     this.receivedBuffers = [];
@@ -106,12 +109,17 @@ export class P2PTransferManager {
 
   /**
    * @param {(code: string) => void} onRoomCreated
+   * @param {string} [pin='']
+   * @param {boolean} [autoDestruct=false]
    */
-  createRoom(onRoomCreated) {
+  createRoom(onRoomCreated, pin = '', autoDestruct = false) {
     this.isSender = true;
+    this.pin = pin;
+    this.autoDestruct = autoDestruct;
     this.ws?.send(
       JSON.stringify({
         event: SignalingEventType.CREATE_ROOM,
+        payload: { pin, autoDestruct },
         timestamp: Date.now(),
       })
     );
@@ -139,13 +147,15 @@ export class P2PTransferManager {
   /**
    * @param {string} roomCode
    * @param {() => void} onJoined
+   * @param {string} [pin='']
    */
-  joinRoom(roomCode, onJoined) {
+  joinRoom(roomCode, onJoined, pin = '') {
     this.isSender = false;
+    this.pin = pin;
     this.ws?.send(
       JSON.stringify({
         event: SignalingEventType.JOIN_ROOM,
-        payload: { roomCode },
+        payload: { roomCode, pin },
         timestamp: Date.now(),
       })
     );
@@ -175,7 +185,15 @@ export class P2PTransferManager {
    */
   async handleSignalingMessage(message) {
     switch (message.event) {
+      case SignalingEventType.ERROR: {
+        const errPayloadMsg = message.payload?.message || 'Invalid or expired 6-digit session code.';
+        console.warn('[P2P] Signaling Error:', errPayloadMsg);
+        this.onErrorCallback?.(errPayloadMsg);
+        break;
+      }
+
       case SignalingEventType.ROOM_JOINED:
+        audioSynth.playPeerConnectedChime();
         if (this.isSender) {
           this.ws?.send(
             JSON.stringify({
@@ -192,7 +210,7 @@ export class P2PTransferManager {
       case SignalingEventType.ECDH_PUBLIC_KEY:
         const peerJwk = message.payload.publicKeyJwk;
         const peerPublicKey = await importPeerPublicKey(peerJwk);
-        this.aesKey = await deriveSharedAESKey(this.ownKeyPair.privateKey, peerPublicKey);
+        this.aesKey = await deriveSharedAESKey(this.ownKeyPair.privateKey, peerPublicKey, this.pin || '');
         console.log('[P2P] E2EE AES-256-GCM Key Derived Successfully!');
 
         if (!this.isSender) {
@@ -303,27 +321,36 @@ export class P2PTransferManager {
           this.receivedBuffers = [];
         }
       } else if (event.data instanceof ArrayBuffer) {
-        const decrypted = await decryptChunk(event.data, this.aesKey);
-        this.receivedBuffers.push(decrypted);
+        try {
+          const decrypted = await decryptChunk(event.data, this.aesKey);
+          this.receivedBuffers.push(decrypted);
 
-        if (this.currentMetadata && this.onProgressCallback) {
-          const totalReceived = this.receivedBuffers.reduce((acc, b) => acc + b.byteLength, 0);
-          this.onProgressCallback({
-            fileId: this.currentMetadata.fileId,
-            bytesTransferred: totalReceived,
-            totalBytes: this.currentMetadata.fileSize,
-            chunksCompleted: this.receivedBuffers.length,
-            totalChunks: this.currentMetadata.totalChunks,
-            speedBps: 2.5 * 1024 * 1024,
-            etaSeconds: Math.ceil((this.currentMetadata.fileSize - totalReceived) / (2.5 * 1024 * 1024)),
-            status: totalReceived >= this.currentMetadata.fileSize ? 'completed' : 'streaming',
-            isThrottled: this.isThrottled,
-          });
+          if (this.currentMetadata && this.onProgressCallback) {
+            const totalReceived = this.receivedBuffers.reduce((acc, b) => acc + b.byteLength, 0);
+            this.onProgressCallback({
+              fileId: this.currentMetadata.fileId,
+              bytesTransferred: totalReceived,
+              totalBytes: this.currentMetadata.fileSize,
+              chunksCompleted: this.receivedBuffers.length,
+              totalChunks: this.currentMetadata.totalChunks,
+              speedBps: 2.5 * 1024 * 1024,
+              etaSeconds: Math.ceil((this.currentMetadata.fileSize - totalReceived) / (2.5 * 1024 * 1024)),
+              status: totalReceived >= this.currentMetadata.fileSize ? 'completed' : 'streaming',
+              isThrottled: this.isThrottled,
+            });
 
-          if (totalReceived >= this.currentMetadata.fileSize) {
-            const blob = new Blob(this.receivedBuffers, { type: this.currentMetadata.fileType });
-            this.onFileReceivedCallback?.(blob, this.currentMetadata);
+            if (totalReceived >= this.currentMetadata.fileSize) {
+              audioSynth.playTransferCompleteChime();
+              const blob = new Blob(this.receivedBuffers, { type: this.currentMetadata.fileType });
+              this.onFileReceivedCallback?.(blob, this.currentMetadata);
+              this.receivedBuffers = [];
+              this.currentMetadata = null;
+            }
           }
+        } catch (err) {
+          console.error('[P2P E2EE] Chunk Decryption Failed — Security PIN Mismatch:', err);
+          const pinErrMsg = 'Decryption Failed: Incorrect 4-Digit Security PIN or Key Mismatch. Please re-enter the session with the correct PIN.';
+          this.onErrorCallback?.(pinErrMsg);
         }
       }
     };
@@ -332,23 +359,24 @@ export class P2PTransferManager {
   tryStartPendingTransfer() {
     if (
       this.isSender &&
-      this.pendingFile &&
+      this.pendingFiles &&
+      this.pendingFiles.length > 0 &&
       this.aesKey &&
       this.dataChannel &&
       this.dataChannel.readyState === 'open' &&
       !this.isTransferring
     ) {
       this.isTransferring = true;
-      this.startChunkedTransfer(this.pendingFile, this.onProgressCallback);
+      this.startChunkedTransfer(this.pendingFiles, this.onProgressCallback);
     }
   }
 
   /**
-   * @param {File} file
+   * @param {File | File[]} files
    * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
    */
-  async sendFile(file, onProgress) {
-    this.pendingFile = file;
+  async sendFiles(files, onProgress) {
+    this.pendingFiles = Array.isArray(files) ? files : [files];
     if (onProgress) this.onProgressCallback = onProgress;
     this.tryStartPendingTransfer();
   }
@@ -357,57 +385,73 @@ export class P2PTransferManager {
    * @param {File} file
    * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
    */
-  async startChunkedTransfer(file, onProgress) {
+  async sendFile(file, onProgress) {
+    return this.sendFiles([file], onProgress);
+  }
+
+  /**
+   * @param {File | File[]} files
+   * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
+   */
+  async startChunkedTransfer(files, onProgress) {
     if (!this.dataChannel || !this.aesKey) return;
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    /** @type {import('@cipherstream/types').FileMetadata} */
-    const metadata = {
-      fileId: `file_${Date.now()}`,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type,
-      totalChunks,
-      chunkSize: CHUNK_SIZE,
-      sha256Digest: '',
-    };
+    const fileList = Array.isArray(files) ? files : [files];
+    if (fileList.length === 0) return;
 
-    this.dataChannel.send(JSON.stringify({ type: 'METADATA', metadata }));
-
-    let bytesSent = 0;
+    const grandTotalBytes = fileList.reduce((sum, f) => sum + f.size, 0);
+    let totalBytesSent = 0;
     const startTime = Date.now();
 
-    for (let i = 0; i < totalChunks; i++) {
-      if (this.isThrottled) {
-        await new Promise((r) => setTimeout(r, 40));
-      }
-
-      while (this.dataChannel.bufferedAmount > BUFFER_HIGH_WATERMARK) {
-        await new Promise((r) => setTimeout(r, 15));
-      }
-
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(file.size, start + CHUNK_SIZE);
-      const chunkBuffer = await file.slice(start, end).arrayBuffer();
-      const encryptedBuffer = await encryptChunk(chunkBuffer, this.aesKey);
-
-      this.dataChannel.send(encryptedBuffer);
-      bytesSent += (end - start);
-
-      const elapsedSec = (Date.now() - startTime) / 1000 || 0.1;
-      const speedBps = bytesSent / elapsedSec;
-
-      onProgress?.({
-        fileId: metadata.fileId,
-        bytesTransferred: bytesSent,
-        totalBytes: file.size,
-        chunksCompleted: i + 1,
+    for (let fIdx = 0; fIdx < fileList.length; fIdx++) {
+      const file = fileList[fIdx];
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      /** @type {import('@cipherstream/types').FileMetadata} */
+      const metadata = {
+        fileId: `file_${Date.now()}_${fIdx}`,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
         totalChunks,
-        speedBps,
-        etaSeconds: Math.ceil((file.size - bytesSent) / speedBps),
-        status: i + 1 === totalChunks ? 'completed' : 'streaming',
-        isThrottled: this.isThrottled,
-      });
+        chunkSize: CHUNK_SIZE,
+        sha256Digest: '',
+      };
+
+      this.dataChannel.send(JSON.stringify({ type: 'METADATA', metadata }));
+
+      for (let i = 0; i < totalChunks; i++) {
+        if (this.isThrottled) {
+          await new Promise((r) => setTimeout(r, 40));
+        }
+
+        while (this.dataChannel.bufferedAmount > BUFFER_HIGH_WATERMARK) {
+          await new Promise((r) => setTimeout(r, 15));
+        }
+
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(file.size, start + CHUNK_SIZE);
+        const chunkBuffer = await file.slice(start, end).arrayBuffer();
+        const encryptedBuffer = await encryptChunk(chunkBuffer, this.aesKey);
+
+        this.dataChannel.send(encryptedBuffer);
+        totalBytesSent += (end - start);
+
+        const elapsedSec = (Date.now() - startTime) / 1000 || 0.1;
+        const speedBps = totalBytesSent / elapsedSec;
+
+        onProgress?.({
+          fileId: `${file.name} (${fIdx + 1}/${fileList.length})`,
+          bytesTransferred: totalBytesSent,
+          totalBytes: grandTotalBytes,
+          chunksCompleted: i + 1,
+          totalChunks: Math.ceil(grandTotalBytes / CHUNK_SIZE),
+          speedBps,
+          etaSeconds: Math.ceil((grandTotalBytes - totalBytesSent) / (speedBps || 1)),
+          status: totalBytesSent >= grandTotalBytes ? 'completed' : 'streaming',
+          isThrottled: this.isThrottled,
+        });
+      }
     }
+    this.isTransferring = false;
   }
 
   /**
@@ -422,5 +466,12 @@ export class P2PTransferManager {
    */
   setOnFileReceived(cb) {
     this.onFileReceivedCallback = cb;
+  }
+
+  /**
+   * @param {(errorMsg: string) => void} cb
+   */
+  setOnError(cb) {
+    this.onErrorCallback = cb;
   }
 }

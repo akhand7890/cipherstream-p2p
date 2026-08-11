@@ -10,6 +10,7 @@ import { HowItWorksTimeline } from '@/components/HowItWorksTimeline';
 import { TechSpecsCard } from '@/components/TechSpecsCard';
 import { TelemetryWidget } from '@/components/TelemetryWidget';
 import { AuthModal } from '@/components/AuthModal';
+import { ErrorModal } from '@/components/ErrorModal';
 import { UserDashboard } from '@/components/UserDashboard';
 import { SenderView } from '@/components/SenderView';
 import { ReceiverView } from '@/components/ReceiverView';
@@ -20,12 +21,13 @@ import { X } from 'lucide-react';
 export default function Home() {
   const [user, setUser] = useState(null); // null | { name: string, email: string }
   const [authModalState, setAuthModalState] = useState({ isOpen: false, tab: 'login' });
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const [mode, setMode] = useState(null); // null | 'sender' | 'receiver'
   const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState('');
-  /** @type {[File | null, React.Dispatch<React.SetStateAction<File | null>>]} */
-  const [selectedFile, setSelectedFile] = useState(null);
+  /** @type {[File[], React.Dispatch<React.SetStateAction<File[]>>]} */
+  const [selectedFiles, setSelectedFiles] = useState([]);
   /** @type {[import('@cipherstream/types').TransferProgress | null, React.Dispatch<React.SetStateAction<import('@cipherstream/types').TransferProgress | null>>]} */
   const [progress, setProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +44,10 @@ export default function Home() {
     });
 
     managerRef.current.setOnProgress((prog) => setProgress(prog));
+    managerRef.current.setOnError((msg) => {
+      setIsLoading(false);
+      setErrorMessage(msg);
+    });
     managerRef.current.setOnFileReceived((blob, metadata) => {
       setReceivedFile({ blob, metadata });
       const url = URL.createObjectURL(blob);
@@ -53,28 +59,49 @@ export default function Home() {
     });
   }, []);
 
-  const handleCreateSession = () => {
+  const handleCreateSession = (pin = '', autoDestruct = false) => {
+    if (!user) {
+      setAuthModalState({ isOpen: true, tab: 'signup' });
+      return;
+    }
     if (!managerRef.current) return;
-    managerRef.current.createRoom((code) => {
-      setRoomCode(code);
-      if (selectedFile) {
-        managerRef.current?.sendFile(selectedFile, (prog) => setProgress(prog));
-      }
-    });
+    managerRef.current.createRoom(
+      (code) => {
+        setRoomCode(code);
+        if (selectedFiles.length > 0) {
+          managerRef.current?.sendFiles(selectedFiles, (prog) => setProgress(prog));
+        }
+      },
+      pin,
+      autoDestruct
+    );
   };
 
   /**
    * @param {string} code
+   * @param {string} [pin]
    */
-  const handleJoinSession = (code) => {
+  const handleJoinSession = (code, pin = '') => {
+    if (!user) {
+      setAuthModalState({ isOpen: true, tab: 'login' });
+      return;
+    }
     setIsLoading(true);
-    managerRef.current?.joinRoom(code, () => {
-      setIsLoading(false);
-      setIsConnected(true);
-    });
+    managerRef.current?.joinRoom(
+      code,
+      () => {
+        setIsLoading(false);
+        setIsConnected(true);
+      },
+      pin
+    );
   };
 
   const openSender = () => {
+    if (!user) {
+      setAuthModalState({ isOpen: true, tab: 'signup' });
+      return;
+    }
     setMode('sender');
     setTimeout(() => {
       transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,6 +109,10 @@ export default function Home() {
   };
 
   const openReceiver = () => {
+    if (!user) {
+      setAuthModalState({ isOpen: true, tab: 'login' });
+      return;
+    }
     setMode('receiver');
     setTimeout(() => {
       transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -99,6 +130,10 @@ export default function Home() {
   const handleAuthSuccess = (userData) => {
     setUser(userData);
     setAuthModalState({ isOpen: false, tab: 'login' });
+    setMode('sender');
+    setTimeout(() => {
+      transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   return (
@@ -112,6 +147,13 @@ export default function Home() {
         initialTab={authModalState.tab}
         onClose={() => setAuthModalState({ isOpen: false, tab: 'login' })}
         onSuccess={handleAuthSuccess}
+      />
+
+      {/* Sleek Themed Error Popup Modal */}
+      <ErrorModal
+        isOpen={!!errorMessage}
+        errorMessage={errorMessage}
+        onClose={() => setErrorMessage(null)}
       />
 
       <div>
@@ -139,8 +181,8 @@ export default function Home() {
 
               {mode === 'sender' ? (
                 <SenderView
-                  onFileSelect={(file) => setSelectedFile(file)}
-                  selectedFile={selectedFile}
+                  onFilesSelect={(files) => setSelectedFiles(files)}
+                  selectedFiles={selectedFiles}
                   roomCode={roomCode}
                   onCreateSession={handleCreateSession}
                 />
@@ -152,8 +194,8 @@ export default function Home() {
                 <div className="mt-8">
                   <TransferProgress
                     progress={progress}
-                    fileName={selectedFile?.name || receivedFile?.metadata.fileName || 'Encrypted File Stream'}
-                    fileSize={selectedFile?.size || receivedFile?.metadata.fileSize || 0}
+                    fileName={selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(', ') : receivedFile?.metadata.fileName || 'Encrypted File Stream'}
+                    fileSize={selectedFiles.reduce((acc, f) => acc + f.size, 0) || receivedFile?.metadata.fileSize || 0}
                   />
                 </div>
               )}

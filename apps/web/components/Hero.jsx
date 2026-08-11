@@ -34,14 +34,14 @@ export const Hero = ({ onSendFiles, onJoinSession }) => {
       <div className="flex items-center justify-center gap-4 pt-4">
         <button
           onClick={onSendFiles}
-          className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold text-sm transition-all duration-300 shadow-xl shadow-purple-600/35 flex items-center gap-2 transform hover:-translate-y-0.5"
+          className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold text-sm transition-all duration-300 shadow-xl shadow-purple-600/35 flex items-center gap-2 transform hover:-translate-y-0.5 cursor-pointer"
         >
           Send Files Now
           <ArrowRight className="h-4 w-4" />
         </button>
         <button
           onClick={onJoinSession}
-          className="px-8 py-3.5 rounded-2xl glass-panel hover:bg-slate-800/60 text-slate-200 hover:text-white font-bold text-sm transition-all duration-300 border border-slate-700/80 shadow-lg"
+          className="px-8 py-3.5 rounded-2xl glass-panel hover:bg-slate-800/60 text-slate-200 hover:text-white font-bold text-sm transition-all duration-300 border border-slate-700/80 shadow-lg cursor-pointer"
         >
           Join Session
         </button>

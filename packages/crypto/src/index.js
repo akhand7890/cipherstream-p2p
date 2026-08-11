@@ -48,12 +48,13 @@ export async function importPeerPublicKey(jwk) {
 }
 
 /**
- * Derive a 256-bit AES-GCM symmetric key using ECDH shared secret & HKDF
+ * Derive a 256-bit AES-GCM symmetric key using ECDH shared secret & HKDF (with optional PIN authentication)
  * @param {CryptoKey} ownPrivateKey
  * @param {CryptoKey} peerPublicKey
+ * @param {string} [pin='']
  * @returns {Promise<CryptoKey>}
  */
-export async function deriveSharedAESKey(ownPrivateKey, peerPublicKey) {
+export async function deriveSharedAESKey(ownPrivateKey, peerPublicKey, pin = '') {
   const sharedBits = await window.crypto.subtle.deriveBits(
     {
       name: 'ECDH',
@@ -71,12 +72,15 @@ export async function deriveSharedAESKey(ownPrivateKey, peerPublicKey) {
     ['deriveKey']
   );
 
+  const cleanPin = String(pin || '').trim();
+  const infoText = cleanPin ? `cipherstream-p2p-v1-e2ee-pin-${cleanPin}` : 'cipherstream-p2p-v1-e2ee';
+
   return await window.crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
       salt: new Uint8Array(16), // Ephemeral salt
-      info: new TextEncoder().encode('cipherstream-p2p-v1-e2ee'),
+      info: new TextEncoder().encode(infoText),
     },
     hkdfKey,
     {
