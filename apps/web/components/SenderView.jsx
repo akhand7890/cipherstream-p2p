@@ -104,7 +104,10 @@ export const SenderView = ({
 
       <div className="flex gap-4">
         <button
-          onClick={onCreateSession}
+          onClick={() => {
+            onCreateSession();
+            setIsQrOpen(true);
+          }}
           className="flex-1 py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-base transition shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2"
         >
           <Zap className="h-5 w-5" />
