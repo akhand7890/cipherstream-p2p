@@ -150,7 +150,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/60 py-6 px-6 text-center text-xs text-slate-400 font-mono relative z-10 bg-[#060913]/90">
-        DirectShare • CipherStream P2P • Zero-Cloud E2EE Architecture • JavaScript + JSDoc Annotated
+        CipherStream P2P • Zero-Cloud E2EE Architecture • JavaScript + JSDoc Annotated
       </footer>
     </div>
   );

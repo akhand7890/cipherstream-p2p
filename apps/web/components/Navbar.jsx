@@ -18,7 +18,7 @@ export const Navbar = ({ onLogin, onSignUp }) => {
             <ArrowLeftRight className="h-5 w-5 text-white" />
           </div>
           <span className="font-extrabold text-xl tracking-tight text-white">
-            Direct<span className="text-purple-400">Share</span>
+            Cipher<span className="text-purple-400">Stream</span>
           </span>
         </div>
 
