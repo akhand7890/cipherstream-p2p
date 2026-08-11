@@ -1,15 +1,21 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Header } from '@/components/Header';
+import { Navbar } from '@/components/Navbar';
+import { Hero } from '@/components/Hero';
+import { ConstellationBg } from '@/components/ConstellationBg';
+import { ValuePillars } from '@/components/ValuePillars';
+import { HowItWorksTimeline } from '@/components/HowItWorksTimeline';
+import { TechSpecsCard } from '@/components/TechSpecsCard';
+import { TelemetryWidget } from '@/components/TelemetryWidget';
 import { SenderView } from '@/components/SenderView';
 import { ReceiverView } from '@/components/ReceiverView';
 import { TransferProgress } from '@/components/TransferProgress';
 import { P2PTransferManager } from '@/lib/webrtc';
-import { Shield, Zap, CloudOff, BatteryCharging } from 'lucide-react';
+import { X } from 'lucide-react';
 
 export default function Home() {
-  const [mode, setMode] = useState('sender');
+  const [mode, setMode] = useState(null); // null | 'sender' | 'receiver'
   const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   /** @type {[File | null, React.Dispatch<React.SetStateAction<File | null>>]} */
@@ -21,6 +27,7 @@ export default function Home() {
 
   /** @type {React.MutableRefObject<P2PTransferManager | null>} */
   const managerRef = useRef(null);
+  const transferSectionRef = useRef(null);
 
   useEffect(() => {
     managerRef.current = new P2PTransferManager();
@@ -61,96 +68,89 @@ export default function Home() {
     });
   };
 
+  const openSender = () => {
+    setMode('sender');
+    setTimeout(() => {
+      transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const openReceiver = () => {
+    setMode('receiver');
+    setTimeout(() => {
+      transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col justify-between">
+    <div className="min-h-screen bg-[#060913] text-slate-100 flex flex-col justify-between relative overflow-hidden">
+      {/* Background Glowing Constellation Canvas */}
+      <ConstellationBg />
+
       <div>
-        <Header mode={mode} setMode={setMode} isConnected={isConnected} />
+        {/* Top Navbar */}
+        <Navbar onLogin={openSender} onSignUp={openSender} />
 
-        <main className="max-w-7xl mx-auto px-6 py-12 space-y-16">
-          <div className="text-center max-w-3xl mx-auto space-y-4">
-            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-semibold uppercase tracking-wider">
-              PEER-TO-PEER FILE TRANSFER PLATFORM • JSDoc ZERO-BUILD TYPE SAFETY
-            </span>
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
-              If privacy and speed matter, <br />
-              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                your files deserve a direct connection.
-              </span>
-            </h1>
-            <p className="text-base md:text-lg text-slate-400">
-              Share files directly between browsers with end-to-end WebCrypto encryption. Zero cloud storage, zero file size limits.
-            </p>
-          </div>
+        {/* Main Homepage Container */}
+        <main className="max-w-7xl mx-auto px-6 py-8 space-y-16 relative z-10">
+          {/* Hero Section */}
+          <Hero onSendFiles={openSender} onJoinSession={openReceiver} />
 
-          <div className="max-w-3xl mx-auto">
-            {mode === 'sender' ? (
-              <SenderView
-                onFileSelect={(file) => setSelectedFile(file)}
-                selectedFile={selectedFile}
-                roomCode={roomCode}
-                onCreateSession={handleCreateSession}
-              />
-            ) : (
-              <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
-            )}
+          {/* Interactive Transfer Engine (Drawer/Modal when active) */}
+          {mode && (
+            <div ref={transferSectionRef} className="max-w-3xl mx-auto glass-panel p-8 rounded-3xl border border-purple-500/40 relative shadow-2xl animate-in zoom-in-95 duration-300">
+              <button
+                onClick={() => setMode(null)}
+                className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/60 text-slate-400 hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
 
-            {progress && (
-              <div className="mt-8">
-                <TransferProgress
-                  progress={progress}
-                  fileName={selectedFile?.name || receivedFile?.metadata.fileName || 'Encrypted File Stream'}
-                  fileSize={selectedFile?.size || receivedFile?.metadata.fileSize || 0}
+              {mode === 'sender' ? (
+                <SenderView
+                  onFileSelect={(file) => setSelectedFile(file)}
+                  selectedFile={selectedFile}
+                  roomCode={roomCode}
+                  onCreateSession={handleCreateSession}
                 />
-              </div>
-            )}
-          </div>
+              ) : (
+                <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
+              )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-6 border-t border-slate-800/80">
-            <div className="glass-card p-6 rounded-2xl space-y-3">
-              <div className="p-3 w-fit rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                <Shield className="h-6 w-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">Direct WebRTC E2EE Data</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Browser-to-browser encrypted streaming using W3C WebCrypto ECDH and AES-256-GCM.
-              </p>
+              {progress && (
+                <div className="mt-8">
+                  <TransferProgress
+                    progress={progress}
+                    fileName={selectedFile?.name || receivedFile?.metadata.fileName || 'Encrypted File Stream'}
+                    fileSize={selectedFile?.size || receivedFile?.metadata.fileSize || 0}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4 Core Value Pillars */}
+          <ValuePillars />
+
+          {/* Bottom Grid: How It Works & Security Specs + Live Telemetry */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-8 border-t border-slate-800/80">
+            {/* Left 2 Columns: How It Works Timeline */}
+            <div className="lg:col-span-2 space-y-8">
+              <HowItWorksTimeline />
             </div>
 
-            <div className="glass-card p-6 rounded-2xl space-y-3">
-              <div className="p-3 w-fit rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                <CloudOff className="h-6 w-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">Zero Cloud Storage</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                No middleman servers, no cloud disk retention, and zero file size caps.
-              </p>
-            </div>
-
-            <div className="glass-card p-6 rounded-2xl space-y-3">
-              <div className="p-3 w-fit rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                <Zap className="h-6 w-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">Sub-50ms Latency</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Blazing fast local peer transfers leveraging high-throughput WebRTC DataChannels.
-              </p>
-            </div>
-
-            <div className="glass-card p-6 rounded-2xl space-y-3">
-              <div className="p-3 w-fit rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <BatteryCharging className="h-6 w-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">Energy & Battery SLA</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Automatic SHA-256 chunk verification and low battery energy-aware throttling.
-              </p>
+            {/* Right Column: Security Specs & Live Telemetry Dashboard */}
+            <div className="space-y-6">
+              <TechSpecsCard />
+              <TelemetryWidget progress={progress} />
             </div>
           </div>
         </main>
       </div>
 
-      <footer className="border-t border-slate-800/60 py-6 px-6 text-center text-xs text-slate-400 font-mono">
-        CipherStream P2P • Zero-Cloud E2EE Architecture • JavaScript + JSDoc Annotated
+      {/* Footer */}
+      <footer className="border-t border-slate-800/60 py-6 px-6 text-center text-xs text-slate-400 font-mono relative z-10 bg-[#060913]/90">
+        DirectShare • CipherStream P2P • Zero-Cloud E2EE Architecture • JavaScript + JSDoc Annotated
       </footer>
     </div>
   );

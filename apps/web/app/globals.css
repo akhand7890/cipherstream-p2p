@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  background-color: #090d16;
+  background-color: #060913;
   color: #f8fafc;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   min-height: 100vh;
@@ -12,23 +12,81 @@ body {
 
 /* Glassmorphism Utilities */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(13, 18, 36, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(22, 30, 56, 0.45);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.glow-violet {
-  box-shadow: 0 0 30px rgba(99, 102, 241, 0.25);
+.glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.15);
+  transform: translateY(-2px);
+}
+
+.glass-pill {
+  background: rgba(30, 41, 75, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Glowing Neon Utilities */
+.glow-purple {
+  box-shadow: 0 0 35px rgba(168, 85, 247, 0.35);
 }
 
 .glow-cyan {
-  box-shadow: 0 0 30px rgba(14, 165, 233, 0.25);
+  box-shadow: 0 0 35px rgba(14, 165, 233, 0.35);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
+}
+
+/* Gradient Text Glow */
+.text-gradient-hero {
+  background: linear-gradient(135deg, #c084fc 0%, #a855f7 35%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Energy Beam Animation for How-It-Works Timeline */
+@keyframes energyBeam {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.energy-beam {
+  background: linear-gradient(90deg, #a855f7, #38bdf8, #818cf8, #a855f7);
+  background-size: 300% 300%;
+  animation: energyBeam 4s ease infinite;
+}
+
+/* Sparkline Glow Animation */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.pulse-sparkline {
+  animation: pulseGlow 2s ease-in-out infinite;
 }
