@@ -6,7 +6,17 @@ import { SignalingEventType } from '@cipherstream/types';
  * Zero build step, runs natively in Node.js ES Modules
  */
 
-const wss = new WebSocketServer({ port: 8080, path: '/ws' });
+const PORT = process.env.PORT || 8080;
+const wss = new WebSocketServer({ port: PORT, path: '/ws' });
+
+wss.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${PORT} is already in use by another process.`);
+    console.error(`👉 Run 'Get-Process node | Stop-Process -Force' in PowerShell to free port ${PORT}.\n`);
+  } else {
+    console.error('[Signaling] WebSocket Server error:', err);
+  }
+});
 
 /**
  * @typedef {Object} RoomSession
