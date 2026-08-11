@@ -2,12 +2,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from '@/components/Navbar';
+import { DashboardNavbar } from '@/components/DashboardNavbar';
 import { Hero } from '@/components/Hero';
 import { ConstellationBg } from '@/components/ConstellationBg';
 import { ValuePillars } from '@/components/ValuePillars';
 import { HowItWorksTimeline } from '@/components/HowItWorksTimeline';
 import { TechSpecsCard } from '@/components/TechSpecsCard';
 import { TelemetryWidget } from '@/components/TelemetryWidget';
+import { AuthModal } from '@/components/AuthModal';
+import { UserDashboard } from '@/components/UserDashboard';
 import { SenderView } from '@/components/SenderView';
 import { ReceiverView } from '@/components/ReceiverView';
 import { TransferProgress } from '@/components/TransferProgress';
@@ -15,6 +18,9 @@ import { P2PTransferManager } from '@/lib/webrtc';
 import { X } from 'lucide-react';
 
 export default function Home() {
+  const [user, setUser] = useState(null); // null | { name: string, email: string }
+  const [authModalState, setAuthModalState] = useState({ isOpen: false, tab: 'login' });
+
   const [mode, setMode] = useState(null); // null | 'sender' | 'receiver'
   const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState('');
@@ -82,21 +88,46 @@ export default function Home() {
     }, 100);
   };
 
+  const openLoginModal = () => {
+    setAuthModalState({ isOpen: true, tab: 'login' });
+  };
+
+  const openSignupModal = () => {
+    setAuthModalState({ isOpen: true, tab: 'signup' });
+  };
+
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+    setAuthModalState({ isOpen: false, tab: 'login' });
+  };
+
   return (
     <div className="min-h-screen bg-[#060913] text-slate-100 flex flex-col justify-between relative overflow-hidden">
       {/* Background Glowing Constellation Canvas */}
       <ConstellationBg />
 
+      {/* Dual Auth Modal (Log In / Create Account) */}
+      <AuthModal
+        isOpen={authModalState.isOpen}
+        initialTab={authModalState.tab}
+        onClose={() => setAuthModalState({ isOpen: false, tab: 'login' })}
+        onSuccess={handleAuthSuccess}
+      />
+
       <div>
-        {/* Top Navbar */}
-        <Navbar onLogin={openSender} onSignUp={openSender} />
+        {/* Top Navbar: Switches between Public & Authenticated State */}
+        {user ? (
+          <DashboardNavbar user={user} onLogout={() => setUser(null)} />
+        ) : (
+          <Navbar onLogin={openLoginModal} onSignUp={openSignupModal} />
+        )}
 
         {/* Main Homepage Container */}
         <main className="max-w-7xl mx-auto px-6 py-8 space-y-16 relative z-10">
           {/* Hero Section */}
           <Hero onSendFiles={openSender} onJoinSession={openReceiver} />
 
-          {/* Interactive Transfer Engine (Drawer/Modal when active) */}
+          {/* Interactive Transfer Engine Drawer */}
           {mode && (
             <div ref={transferSectionRef} className="max-w-3xl mx-auto glass-panel p-8 rounded-3xl border border-purple-500/40 relative shadow-2xl animate-in zoom-in-95 duration-300">
               <button
@@ -126,6 +157,13 @@ export default function Home() {
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Authenticated Dashboard View (when logged in) */}
+          {user && (
+            <div className="space-y-6 pt-4">
+              <UserDashboard user={user} />
             </div>
           )}
 
