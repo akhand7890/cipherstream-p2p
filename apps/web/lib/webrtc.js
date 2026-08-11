@@ -69,19 +69,38 @@ export class P2PTransferManager {
    * @param {() => void} [onOpen]
    */
   connectSignaling(wsUrl = 'ws://localhost:8080/ws', onOpen) {
-    this.ws = new WebSocket(wsUrl);
+    try {
+      this.ws = new WebSocket(wsUrl);
+    } catch (err) {
+      console.warn('[P2P] Failed to instantiate WebSocket:', err);
+      return;
+    }
+
+    this.ws.onerror = (event) => {
+      console.warn('[P2P] WebSocket Signaling Error:', event);
+    };
 
     this.ws.onopen = async () => {
       console.log('[P2P] WebSocket Signaling Connected');
-      const { keyPair, publicKeyJwk } = await generateECDHKeyPair();
-      this.ownKeyPair = keyPair;
-      this.ownPublicKeyJwk = publicKeyJwk;
-      onOpen?.();
+      try {
+        const { keyPair, publicKeyJwk } = await generateECDHKeyPair();
+        this.ownKeyPair = keyPair;
+        this.ownPublicKeyJwk = publicKeyJwk;
+        onOpen?.();
+      } catch (err) {
+        console.error('[P2P] Failed to generate ECDH keys:', err);
+      }
     };
 
     this.ws.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
-      await this.handleSignalingMessage(message);
+      try {
+        if (typeof event.data === 'string') {
+          const message = JSON.parse(event.data);
+          await this.handleSignalingMessage(message);
+        }
+      } catch (err) {
+        console.warn('[P2P] Error handling signaling message:', err);
+      }
     };
   }
 
@@ -100,10 +119,16 @@ export class P2PTransferManager {
     if (!this.ws) return;
     const originalMessage = this.ws.onmessage;
     this.ws.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
-      if (message.event === SignalingEventType.ROOM_CREATED) {
-        this.roomId = message.roomId;
-        onRoomCreated(message.payload.roomCode);
+      try {
+        if (typeof event.data === 'string') {
+          const message = JSON.parse(event.data);
+          if (message.event === SignalingEventType.ROOM_CREATED) {
+            this.roomId = message.roomId;
+            onRoomCreated(message.payload.roomCode);
+          }
+        }
+      } catch (err) {
+        console.warn('[P2P] Error handling room created event:', err);
       }
       if (this.ws) {
         originalMessage?.call(this.ws, event);
@@ -128,10 +153,16 @@ export class P2PTransferManager {
     if (!this.ws) return;
     const originalMessage = this.ws.onmessage;
     this.ws.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
-      if (message.event === SignalingEventType.ROOM_JOINED) {
-        this.roomId = message.roomId;
-        onJoined();
+      try {
+        if (typeof event.data === 'string') {
+          const message = JSON.parse(event.data);
+          if (message.event === SignalingEventType.ROOM_JOINED) {
+            this.roomId = message.roomId;
+            onJoined();
+          }
+        }
+      } catch (err) {
+        console.warn('[P2P] Error handling room joined event:', err);
       }
       if (this.ws) {
         originalMessage?.call(this.ws, event);
