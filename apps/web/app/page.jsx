@@ -12,6 +12,7 @@ import { TelemetryWidget } from '@/components/TelemetryWidget';
 import { AuthModal } from '@/components/AuthModal';
 import { ErrorModal } from '@/components/ErrorModal';
 import { VerifyEmailModal } from '@/components/VerifyEmailModal';
+import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
 import { UserDashboard } from '@/components/UserDashboard';
 import { SenderView } from '@/components/SenderView';
 import { ReceiverView } from '@/components/ReceiverView';
@@ -25,6 +26,7 @@ export default function Home() {
   const [authModalState, setAuthModalState] = useState({ isOpen: false, tab: 'login' });
   const [errorMessage, setErrorMessage] = useState(null);
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
   const [mode, setMode] = useState(null); // null | 'sender' | 'receiver'
   const [isConnected, setIsConnected] = useState(false);
@@ -166,6 +168,17 @@ export default function Home() {
         initialTab={authModalState.tab}
         onClose={() => setAuthModalState({ isOpen: false, tab: 'login' })}
         onSuccess={handleAuthSuccess}
+        onOpenForgotPassword={() => setIsForgotPasswordOpen(true)}
+      />
+
+      {/* Forgot Password Reset Modal */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        onSuccess={(updatedUser) => {
+          handleAuthSuccess(updatedUser, true);
+          setIsForgotPasswordOpen(false);
+        }}
       />
 
       {/* Sleek Themed Error Popup Modal */}

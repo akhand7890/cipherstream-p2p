@@ -153,6 +153,28 @@ export function clearAllUsers() {
 }
 
 /**
+ * Reset password for a registered user
+ * @param {string} email
+ * @param {string} newPassword
+ * @returns {{ success: boolean, user?: UserAccount, error?: string }}
+ */
+export function resetPassword(email, newPassword) {
+  if (typeof window === 'undefined') return { success: false, error: 'Window not available' };
+  const users = getAllUsers();
+  const cleanEmail = email.trim().toLowerCase();
+
+  const user = users.find((u) => u.email === cleanEmail);
+  if (!user) {
+    return { success: false, error: 'No account found with this email address.' };
+  }
+
+  user.password = newPassword;
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+  return { success: true, user };
+}
+
+/**
  * Update user verification status in database
  * @param {string} email
  */

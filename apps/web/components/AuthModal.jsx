@@ -10,8 +10,9 @@ import { loginUser, registerUser } from '@/lib/authDb';
  * @param {'login' | 'signup'} props.initialTab
  * @param {() => void} props.onClose
  * @param {(userData: { name: string, email: string, emailVerified: boolean }, rememberMe?: boolean) => void} props.onSuccess
+ * @param {() => void} [props.onOpenForgotPassword]
  */
-export const AuthModal = ({ isOpen, initialTab = 'login', onClose, onSuccess }) => {
+export const AuthModal = ({ isOpen, initialTab = 'login', onClose, onSuccess, onOpenForgotPassword }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -154,9 +155,16 @@ export const AuthModal = ({ isOpen, initialTab = 'login', onClose, onSuccess }) 
                   />
                   <span>Remember Me</span>
                 </label>
-                <a href="#" className="text-xs font-semibold text-purple-400 hover:text-purple-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenForgotPassword?.();
+                  }}
+                  className="text-xs font-semibold text-purple-400 hover:text-purple-300 cursor-pointer"
+                >
                   Forgot Password?
-                </a>
+                </button>
               </div>
 
               <button
