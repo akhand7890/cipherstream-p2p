@@ -1,14 +1,15 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeftRight, Bell, LogOut } from 'lucide-react';
+import { ArrowLeftRight, Bell, LogOut, ShieldCheck, AlertCircle } from 'lucide-react';
 
 /**
  * @param {Object} props
- * @param {{ name: string, email: string }} props.user
+ * @param {{ name: string, email: string, emailVerified?: boolean }} props.user
  * @param {() => void} props.onLogout
+ * @param {() => void} [props.onOpenVerifyModal]
  */
-export const DashboardNavbar = ({ user, onLogout }) => {
+export const DashboardNavbar = ({ user, onLogout, onOpenVerifyModal }) => {
   const initials = user.name
     .split(' ')
     .map((n) => n[0])
@@ -39,7 +40,23 @@ export const DashboardNavbar = ({ user, onLogout }) => {
 
         {/* User Controls */}
         <div className="flex items-center gap-4">
-          <button className="p-2 rounded-xl text-slate-400 hover:text-white glass-pill transition">
+          {/* Account Trust Status Badge */}
+          {user.emailVerified ? (
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-xs font-semibold text-emerald-300 shadow-sm shadow-emerald-500/10">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Verified Member</span>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenVerifyModal}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 text-xs font-semibold text-amber-300 transition cursor-pointer"
+            >
+              <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+              <span>Verify Email (Unverified)</span>
+            </button>
+          )}
+
+          <button className="p-2 rounded-xl text-slate-400 hover:text-white glass-pill transition cursor-pointer">
             <Bell className="h-4 w-4" />
           </button>
 
@@ -50,7 +67,7 @@ export const DashboardNavbar = ({ user, onLogout }) => {
 
             <button
               onClick={onLogout}
-              className="p-2 rounded-xl text-slate-400 hover:text-red-400 glass-pill transition"
+              className="p-2 rounded-xl text-slate-400 hover:text-red-400 glass-pill transition cursor-pointer"
               title="Log Out"
             >
               <LogOut className="h-4 w-4" />

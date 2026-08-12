@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files } from 'lucide-react';
+import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles } from 'lucide-react';
 import { QRCodeModal } from './QRCodeModal';
 
 /**
@@ -9,17 +9,20 @@ import { QRCodeModal } from './QRCodeModal';
  * @param {(files: File[]) => void} props.onFilesSelect
  * @param {File[]} props.selectedFiles
  * @param {string} props.roomCode
- * @param {(pin?: string, autoDestruct?: boolean) => void} props.onCreateSession
+ * @param {(pin?: string, autoDestruct?: boolean, customCode?: string) => void} props.onCreateSession
+ * @param {boolean} [props.isVerified]
  */
 export const SenderView = ({
   onFilesSelect,
   selectedFiles = [],
   roomCode,
   onCreateSession,
+  isVerified = false,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [pin, setPin] = useState('');
+  const [customCode, setCustomCode] = useState('');
   const [autoDestruct, setAutoDestruct] = useState(false);
 
   /**
@@ -56,7 +59,7 @@ export const SenderView = ({
         </span>
         <h2 className="text-4xl font-extrabold text-white tracking-tight">Send Files</h2>
         <p className="text-sm text-slate-400">
-          Select one or multiple files, generate a 6-digit session code, and stream directly.
+          Select one or multiple files, generate a session code, and stream directly to the receiver.
         </p>
       </div>
 
@@ -142,7 +145,42 @@ export const SenderView = ({
           />
         </div>
 
-        <div className="flex items-center pt-2 sm:pt-4">
+        {/* Custom Room Vanity Code (Verified Member Perk) */}
+        {isVerified ? (
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Verified Custom Room Alias</span>
+            </label>
+            <input
+              type="text"
+              maxLength={12}
+              placeholder="e.g. CIPHER-99"
+              value={customCode}
+              onChange={(e) => setCustomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+              className="w-full px-3 py-2 rounded-xl bg-cyan-950/40 border border-cyan-500/40 text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-400"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center pt-2 sm:pt-4">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoDestruct}
+                onChange={(e) => setAutoDestruct(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500"
+              />
+              <span className="flex items-center gap-1.5">
+                <Flame className="h-4 w-4 text-amber-400 fill-amber-400/20" />
+                <span>Auto-Destruct on Download</span>
+              </span>
+            </label>
+          </div>
+        )}
+      </div>
+
+      {isVerified && (
+        <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
             <input
               type="checkbox"
@@ -152,16 +190,16 @@ export const SenderView = ({
             />
             <span className="flex items-center gap-1.5">
               <Flame className="h-4 w-4 text-amber-400 fill-amber-400/20" />
-              <span>Auto-Destruct on Download</span>
+              <span>Auto-Destruct Room on Download</span>
             </span>
           </label>
         </div>
-      </div>
+      )}
 
       <div className="flex gap-4">
         <button
           onClick={() => {
-            onCreateSession(pin, autoDestruct);
+            onCreateSession(pin, autoDestruct, customCode);
             setIsQrOpen(true);
           }}
           className="flex-1 py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-base transition shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"

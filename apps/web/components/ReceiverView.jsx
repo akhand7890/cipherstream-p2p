@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowRight, ShieldCheck, Lock } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Lock, Sparkles, Hash } from 'lucide-react';
 
 /**
  * @param {Object} props
@@ -9,7 +9,9 @@ import { ArrowRight, ShieldCheck, Lock } from 'lucide-react';
  * @param {boolean} props.isLoading
  */
 export const ReceiverView = ({ onJoinSession, isLoading }) => {
+  const [useVanityMode, setUseVanityMode] = useState(false);
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [customCodeInput, setCustomCodeInput] = useState('');
   const [pin, setPin] = useState('');
 
   /**
@@ -39,14 +41,14 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
     }
   };
 
-  const fullCode = digits.join('');
+  const fullCode = useVanityMode ? customCodeInput.trim().toUpperCase() : digits.join('');
 
   /**
    * @param {React.FormEvent} e
    */
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (fullCode.length === 6) {
+    if (fullCode.length >= 4) {
       onJoinSession(fullCode, pin);
     }
   };
@@ -59,26 +61,62 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
         </span>
         <h2 className="text-4xl font-extrabold text-white tracking-tight">Join Session</h2>
         <p className="text-sm text-slate-400">
-          Enter the 6-digit code provided by the sender to initiate peer connection.
+          Enter the 6-digit code or custom vanity room alias provided by the sender.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="glass-panel rounded-3xl p-8 border border-slate-800 space-y-6">
-        <div className="flex justify-center gap-3">
-          {digits.map((digit, idx) => (
-            <input
-              key={idx}
-              id={`digit-${idx}`}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleDigitChange(idx, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(idx, e)}
-              className="w-14 h-16 text-center text-3xl font-extrabold font-mono bg-slate-900/90 text-indigo-400 border border-slate-700/80 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none transition shadow-inner"
-            />
-          ))}
+        {/* Toggle between 6-Digit Code and Custom Vanity Alias */}
+        <div className="flex justify-center gap-4 text-xs font-semibold text-slate-400 border-b border-slate-800/80 pb-4">
+          <button
+            type="button"
+            onClick={() => setUseVanityMode(false)}
+            className={`flex items-center gap-1.5 pb-1 transition cursor-pointer ${
+              !useVanityMode ? 'text-indigo-400 border-b-2 border-indigo-500 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Hash className="h-4 w-4" />
+            <span>6-Digit Code</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setUseVanityMode(true)}
+            className={`flex items-center gap-1.5 pb-1 transition cursor-pointer ${
+              useVanityMode ? 'text-cyan-400 border-b-2 border-cyan-500 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="h-4 w-4 text-cyan-400" />
+            <span>Custom Vanity Alias</span>
+          </button>
         </div>
+
+        {useVanityMode ? (
+          <div className="max-w-md mx-auto space-y-2">
+            <input
+              type="text"
+              placeholder="e.g. CIPHER-99"
+              value={customCodeInput}
+              onChange={(e) => setCustomCodeInput(e.target.value.toUpperCase())}
+              className="w-full py-3.5 px-4 text-center text-xl font-bold font-mono bg-slate-900/90 text-cyan-300 border border-slate-700 rounded-2xl focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 focus:outline-none transition"
+            />
+          </div>
+        ) : (
+          <div className="flex justify-center gap-3">
+            {digits.map((digit, idx) => (
+              <input
+                key={idx}
+                id={`digit-${idx}`}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleDigitChange(idx, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(idx, e)}
+                className="w-14 h-16 text-center text-3xl font-extrabold font-mono bg-slate-900/90 text-indigo-400 border border-slate-700/80 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none transition shadow-inner"
+              />
+            ))}
+          </div>
+        )}
 
         {/* Optional Security PIN Input */}
         <div className="max-w-xs mx-auto space-y-1 text-center pt-2">
@@ -98,8 +136,8 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
 
         <button
           type="submit"
-          disabled={fullCode.length !== 6 || isLoading}
-          className="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-base transition shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2"
+          disabled={fullCode.length < 4 || isLoading}
+          className="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-base transition shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
         >
           {isLoading ? (
             'Securing Peer Connection...'

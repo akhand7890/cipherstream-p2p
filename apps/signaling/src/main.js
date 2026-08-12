@@ -42,7 +42,10 @@ wss.on('connection', (ws) => {
       switch (message.event) {
         case SignalingEventType.CREATE_ROOM: {
           const roomId = `room_${Math.random().toString(36).substring(2, 9)}`;
-          const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+          const requestedCode = message.payload?.customCode?.trim()?.toUpperCase();
+          const roomCode = (requestedCode && requestedCode.length >= 4 && !codeToRoomId.has(requestedCode))
+            ? requestedCode
+            : Math.floor(100000 + Math.random() * 900000).toString();
 
           /** @type {RoomSession} */
           const session = {

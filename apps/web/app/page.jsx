@@ -11,17 +11,20 @@ import { TechSpecsCard } from '@/components/TechSpecsCard';
 import { TelemetryWidget } from '@/components/TelemetryWidget';
 import { AuthModal } from '@/components/AuthModal';
 import { ErrorModal } from '@/components/ErrorModal';
+import { VerifyEmailModal } from '@/components/VerifyEmailModal';
 import { UserDashboard } from '@/components/UserDashboard';
 import { SenderView } from '@/components/SenderView';
 import { ReceiverView } from '@/components/ReceiverView';
 import { TransferProgress } from '@/components/TransferProgress';
 import { P2PTransferManager } from '@/lib/webrtc';
+import { getStoredSession, saveSession, clearStoredSession, markEmailVerified } from '@/lib/authDb';
 import { X } from 'lucide-react';
 
 export default function Home() {
-  const [user, setUser] = useState(null); // null | { name: string, email: string }
+  const [user, setUser] = useState(null); // null | { name: string, email: string, emailVerified?: boolean }
   const [authModalState, setAuthModalState] = useState({ isOpen: false, tab: 'login' });
   const [errorMessage, setErrorMessage] = useState(null);
+  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
 
   const [mode, setMode] = useState(null); // null | 'sender' | 'receiver'
   const [isConnected, setIsConnected] = useState(false);
@@ -38,6 +41,12 @@ export default function Home() {
   const transferSectionRef = useRef(null);
 
   useEffect(() => {
+    // Restore persistent session on startup
+    const activeSession = getStoredSession();
+    if (activeSession) {
+      setUser(activeSession);
+    }
+
     managerRef.current = new P2PTransferManager();
     managerRef.current.connectSignaling('ws://localhost:8080/ws', () => {
       setIsConnected(true);
@@ -59,7 +68,7 @@ export default function Home() {
     });
   }, []);
 
-  const handleCreateSession = (pin = '', autoDestruct = false) => {
+  const handleCreateSession = (pin = '', autoDestruct = false, customCode = '') => {
     if (!user) {
       setAuthModalState({ isOpen: true, tab: 'signup' });
       return;
@@ -73,7 +82,8 @@ export default function Home() {
         }
       },
       pin,
-      autoDestruct
+      autoDestruct,
+      customCode
     );
   };
 
@@ -127,13 +137,22 @@ export default function Home() {
     setAuthModalState({ isOpen: true, tab: 'signup' });
   };
 
-  const handleAuthSuccess = (userData) => {
+  const handleAuthSuccess = (userData, rememberMe = true) => {
     setUser(userData);
+    saveSession(userData, rememberMe);
     setAuthModalState({ isOpen: false, tab: 'login' });
     setMode('sender');
     setTimeout(() => {
       transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+  };
+
+  const handleLogout = () => {
+    clearStoredSession();
+    setUser(null);
+    setMode(null);
+    setRoomCode('');
+    setSelectedFiles([]);
   };
 
   return (
@@ -156,10 +175,28 @@ export default function Home() {
         onClose={() => setErrorMessage(null)}
       />
 
+      {/* Account Email Verification Modal */}
+      <VerifyEmailModal
+        isOpen={isVerifyModalOpen}
+        email={user?.email || ''}
+        onClose={() => setIsVerifyModalOpen(false)}
+        onVerificationSuccess={() => {
+          if (user?.email) {
+            markEmailVerified(user.email);
+          }
+          setUser((prev) => (prev ? { ...prev, emailVerified: true } : null));
+          setIsVerifyModalOpen(false);
+        }}
+      />
+
       <div>
         {/* Top Navbar: Switches between Public & Authenticated State */}
         {user ? (
-          <DashboardNavbar user={user} onLogout={() => setUser(null)} />
+          <DashboardNavbar
+            user={user}
+            onLogout={handleLogout}
+            onOpenVerifyModal={() => setIsVerifyModalOpen(true)}
+          />
         ) : (
           <Navbar onLogin={openLoginModal} onSignUp={openSignupModal} />
         )}
@@ -174,7 +211,7 @@ export default function Home() {
             <div ref={transferSectionRef} className="max-w-3xl mx-auto glass-panel p-8 rounded-3xl border border-purple-500/40 relative shadow-2xl animate-in zoom-in-95 duration-300">
               <button
                 onClick={() => setMode(null)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/60 text-slate-400 hover:text-white transition"
+                className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/60 text-slate-400 hover:text-white transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -185,6 +222,7 @@ export default function Home() {
                   selectedFiles={selectedFiles}
                   roomCode={roomCode}
                   onCreateSession={handleCreateSession}
+                  isVerified={user?.emailVerified}
                 />
               ) : (
                 <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
@@ -205,7 +243,7 @@ export default function Home() {
           {/* Authenticated Dashboard View (when logged in) */}
           {user && (
             <div className="space-y-6 pt-4">
-              <UserDashboard user={user} />
+              <UserDashboard user={user} onOpenVerifyModal={() => setIsVerifyModalOpen(true)} />
             </div>
           )}
 

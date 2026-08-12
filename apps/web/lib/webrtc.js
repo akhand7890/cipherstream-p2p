@@ -111,15 +111,16 @@ export class P2PTransferManager {
    * @param {(code: string) => void} onRoomCreated
    * @param {string} [pin='']
    * @param {boolean} [autoDestruct=false]
+   * @param {string} [customCode='']
    */
-  createRoom(onRoomCreated, pin = '', autoDestruct = false) {
+  createRoom(onRoomCreated, pin = '', autoDestruct = false, customCode = '') {
     this.isSender = true;
     this.pin = pin;
     this.autoDestruct = autoDestruct;
     this.ws?.send(
       JSON.stringify({
         event: SignalingEventType.CREATE_ROOM,
-        payload: { pin, autoDestruct },
+        payload: { pin, autoDestruct, customCode },
         timestamp: Date.now(),
       })
     );
