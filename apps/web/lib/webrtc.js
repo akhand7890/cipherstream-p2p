@@ -437,6 +437,7 @@ export class P2PTransferManager {
         totalChunks,
         chunkSize: CHUNK_SIZE,
         sha256Digest: '',
+        relativePath: file.relativePath || file.webkitRelativePath || file.name,
       };
 
       this.dataChannel.send(JSON.stringify({ type: 'METADATA', metadata }));
@@ -467,7 +468,7 @@ export class P2PTransferManager {
         const speedBps = totalBytesSent / elapsedSec;
 
         const progData = {
-          fileId: `${file.name} (${fIdx + 1}/${fileList.length})`,
+          fileId: `${file.relativePath || file.name} (${fIdx + 1}/${fileList.length})`,
           bytesTransferred: totalBytesSent,
           totalBytes: grandTotalBytes,
           chunksCompleted: i + 1,
@@ -477,6 +478,7 @@ export class P2PTransferManager {
           status: totalBytesSent >= grandTotalBytes ? 'completed' : this.isPaused ? 'paused' : 'streaming',
           isThrottled: this.isThrottled,
           isPaused: this.isPaused,
+          isFolder: fileList.some((f) => f.relativePath && f.relativePath.includes('/')),
         };
         this.lastProgress = progData;
         onProgress?.(progData);

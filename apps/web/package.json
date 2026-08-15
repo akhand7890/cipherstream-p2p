@@ -13,6 +13,7 @@
     "@cipherstream/crypto": "workspace:*",
     "@cipherstream/types": "workspace:*",
     "clsx": "^2.1.1",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
     "next": "^15.1.0",
     "qrcode.react": "^4.2.0",

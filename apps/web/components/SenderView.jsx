@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play, Folder, FolderPlus } from 'lucide-react';
 import { QRCodeModal } from './QRCodeModal';
+import { traverseDataTransferItems, normalizeDirectoryFiles } from '../lib/directoryTree';
 
 /**
  * @param {Object} props
@@ -34,16 +35,28 @@ export const SenderView = ({
   const [customCode, setCustomCode] = useState('');
   const [autoDestruct, setAutoDestruct] = useState(false);
 
+  const folderInputRef = useRef(null);
+
   const activePaused = isPaused || localPaused;
+  const isFolderTransfer = selectedFiles.some((f) => f.relativePath || f.webkitRelativePath);
 
   /**
    * @param {React.DragEvent} e
    */
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     setIsDragOver(false);
+
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      const folderFiles = await traverseDataTransferItems(e.dataTransfer.items);
+      if (folderFiles.length > 0) {
+        onFilesSelect(normalizeDirectoryFiles(folderFiles));
+        return;
+      }
+    }
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onFilesSelect(Array.from(e.dataTransfer.files));
+      onFilesSelect(normalizeDirectoryFiles(Array.from(e.dataTransfer.files)));
     }
   };
 
@@ -52,7 +65,7 @@ export const SenderView = ({
    */
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      onFilesSelect(Array.from(e.target.files));
+      onFilesSelect(normalizeDirectoryFiles(Array.from(e.target.files)));
     }
   };
 
@@ -69,9 +82,9 @@ export const SenderView = ({
         <span className="text-xs font-mono uppercase tracking-widest text-indigo-400 font-bold">
           Direct Peer-to-Peer Transfer
         </span>
-        <h2 className="text-4xl font-extrabold text-white tracking-tight">Send Files</h2>
+        <h2 className="text-4xl font-extrabold text-white tracking-tight">Send Files & Folders</h2>
         <p className="text-sm text-slate-400">
-          Select one or multiple files, generate a session code, and stream directly to the receiver.
+          Select files or an entire folder hierarchy, generate a session code, and stream directly to the receiver.
         </p>
       </div>
 
@@ -100,7 +113,11 @@ export const SenderView = ({
         <div className="space-y-4 pointer-events-none">
           <div className="h-16 w-16 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition duration-300">
             {selectedFiles.length > 0 ? (
-              <CheckCircle className="h-8 w-8 text-emerald-400" />
+              isFolderTransfer ? (
+                <Folder className="h-8 w-8 text-purple-400 fill-purple-400/20" />
+              ) : (
+                <CheckCircle className="h-8 w-8 text-emerald-400" />
+              )
             ) : (
               <UploadCloud className="h-8 w-8" />
             )}
@@ -109,32 +126,62 @@ export const SenderView = ({
           {selectedFiles.length > 0 ? (
             <div className="space-y-2">
               <div className="flex items-center justify-center gap-2">
-                <Files className="h-5 w-5 text-emerald-400" />
+                {isFolderTransfer ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase font-mono flex items-center gap-1">
+                    <Folder className="h-3 w-3 text-purple-400" /> FOLDER HIERARCHY
+                  </span>
+                ) : (
+                  <Files className="h-5 w-5 text-emerald-400" />
+                )}
                 <p className="font-bold text-white text-base">
-                  {selectedFiles.length} {selectedFiles.length === 1 ? 'File Selected' : 'Files Selected'}
+                  {selectedFiles.length} {selectedFiles.length === 1 ? 'File Selected' : 'Files in Directory'}
                 </p>
               </div>
               <p className="text-xs text-slate-400 font-mono">
                 Total Payload Size: <span className="text-emerald-400 font-bold">{totalSizeMB.toFixed(2)} MB</span>
               </p>
 
-              {/* Selected File Chips */}
-              <div className="max-h-28 overflow-y-auto space-y-1.5 pt-2 pr-1 text-left">
+              {/* Selected File & Folder Chips */}
+              <div className="max-h-32 overflow-y-auto space-y-1.5 pt-2 pr-1 text-left">
                 {selectedFiles.map((file, idx) => (
                   <div key={idx} className="glass-card px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs flex items-center justify-between text-slate-300">
-                    <span className="truncate max-w-xs font-mono">{file.name}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+                    <span className="truncate max-w-xs font-mono text-slate-300">
+                      {file.relativePath || file.webkitRelativePath || file.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
             <div className="space-y-1">
-              <p className="font-bold text-white text-base">Drop files here or click to browse</p>
-              <p className="text-xs text-slate-400">Supports single or multi-file selection (No File Size Limits)</p>
+              <p className="font-bold text-white text-base">Drop files or folder here, or click to browse</p>
+              <p className="text-xs text-slate-400">Supports single files, multi-file selections, and full folder trees</p>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Hidden Folder Upload Input */}
+      <input
+        ref={folderInputRef}
+        type="file"
+        webkitdirectory="true"
+        directory="true"
+        multiple
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={() => folderInputRef.current?.click()}
+          className="px-4 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/40 text-purple-300 font-bold text-xs flex items-center gap-2 transition cursor-pointer"
+        >
+          <FolderPlus className="h-4 w-4 text-purple-400" />
+          <span>Upload Entire Folder Directory</span>
+        </button>
       </div>
 
       {/* Verified Custom Room Alias Input */}
