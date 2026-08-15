@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles } from 'lucide-react';
+import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play } from 'lucide-react';
 import { QRCodeModal } from './QRCodeModal';
 
 /**
@@ -11,6 +11,10 @@ import { QRCodeModal } from './QRCodeModal';
  * @param {string} props.roomCode
  * @param {(pin?: string, autoDestruct?: boolean, customCode?: string) => void} props.onCreateSession
  * @param {boolean} [props.isVerified]
+ * @param {boolean} [props.isPaused]
+ * @param {() => void} [props.onPause]
+ * @param {() => void} [props.onResume]
+ * @param {boolean} [props.isTransferring]
  */
 export const SenderView = ({
   onFilesSelect,
@@ -18,12 +22,19 @@ export const SenderView = ({
   roomCode,
   onCreateSession,
   isVerified = false,
+  isPaused = false,
+  onPause,
+  onResume,
+  isTransferring = false,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [localPaused, setLocalPaused] = useState(false);
   const [pin, setPin] = useState('');
   const [customCode, setCustomCode] = useState('');
   const [autoDestruct, setAutoDestruct] = useState(false);
+
+  const activePaused = isPaused || localPaused;
 
   /**
    * @param {React.DragEvent} e
@@ -47,9 +58,10 @@ export const SenderView = ({
 
   const totalSizeMB = selectedFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024);
 
-  const joinUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/join?code=${roomCode || '849201'}`
-    : `https://cipherstream.app/join?code=${roomCode || '849201'}`;
+  const joinUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/join?code=${roomCode || '849201'}`
+      : `https://cipherstream.app/join?code=${roomCode || '849201'}`;
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -98,85 +110,66 @@ export const SenderView = ({
             <div className="space-y-2">
               <div className="flex items-center justify-center gap-2">
                 <Files className="h-5 w-5 text-emerald-400" />
-                <p className="text-lg font-bold text-white">
-                  {selectedFiles.length} {selectedFiles.length === 1 ? 'File' : 'Files'} Selected
+                <p className="font-bold text-white text-base">
+                  {selectedFiles.length} {selectedFiles.length === 1 ? 'File Selected' : 'Files Selected'}
                 </p>
               </div>
-
-              <p className="text-xs text-emerald-400 font-mono">
-                {totalSizeMB.toFixed(2)} MB Total • Ready for Multi-File E2EE Stream
+              <p className="text-xs text-slate-400 font-mono">
+                Total Payload Size: <span className="text-emerald-400 font-bold">{totalSizeMB.toFixed(2)} MB</span>
               </p>
 
-              {/* Multi-File List Chips */}
-              <div className="flex flex-wrap justify-center gap-2 pt-2 max-h-24 overflow-y-auto">
+              {/* Selected File Chips */}
+              <div className="max-h-28 overflow-y-auto space-y-1.5 pt-2 pr-1 text-left">
                 {selectedFiles.map((file, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700 text-[11px] font-mono text-slate-300 truncate max-w-[200px]"
-                  >
-                    {file.name}
-                  </span>
+                  <div key={idx} className="glass-card px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs flex items-center justify-between text-slate-300">
+                    <span className="truncate max-w-xs font-mono">{file.name}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div>
-              <p className="text-base font-semibold text-white">Drag & drop files to send</p>
-              <p className="text-xs text-slate-400 mt-1">SELECT SINGLE OR MULTIPLE FILES</p>
+            <div className="space-y-1">
+              <p className="font-bold text-white text-base">Drop files here or click to browse</p>
+              <p className="text-xs text-slate-400">Supports single or multi-file selection (No File Size Limits)</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Enhanced P2P Sending Options */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-900/70 border border-slate-800">
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-            <Lock className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Optional Room Security PIN</span>
-          </label>
+      {/* Verified Custom Room Alias Input */}
+      {isVerified ? (
+        <div className="p-4 rounded-2xl bg-slate-900/80 border border-purple-500/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-purple-300 font-bold flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-purple-400" /> Verified Custom Room Vanity Alias
+            </span>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase font-mono">UNLOCKED</span>
+          </div>
           <input
             type="text"
-            maxLength={4}
-            placeholder="e.g. 4829"
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+            placeholder="Custom Vanity Code (e.g. CIPHER-99)"
+            value={customCode}
+            onChange={(e) => setCustomCode(e.target.value.toUpperCase())}
+            className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-purple-500/40 text-purple-300 font-mono text-sm uppercase placeholder-slate-600 focus:outline-none focus:border-purple-400 transition"
           />
         </div>
+      ) : null}
 
-        {/* Custom Room Vanity Code (Verified Member Perk) */}
-        {isVerified ? (
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-              <span>Verified Custom Room Alias</span>
-            </label>
-            <input
-              type="text"
-              maxLength={12}
-              placeholder="e.g. CIPHER-99"
-              value={customCode}
-              onChange={(e) => setCustomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-              className="w-full px-3 py-2 rounded-xl bg-cyan-950/40 border border-cyan-500/40 text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-400"
-            />
-          </div>
-        ) : (
-          <div className="flex items-center pt-2 sm:pt-4">
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
-              <input
-                type="checkbox"
-                checked={autoDestruct}
-                onChange={(e) => setAutoDestruct(e.target.checked)}
-                className="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500"
-              />
-              <span className="flex items-center gap-1.5">
-                <Flame className="h-4 w-4 text-amber-400 fill-amber-400/20" />
-                <span>Auto-Destruct on Download</span>
-              </span>
-            </label>
-          </div>
-        )}
+      {/* 4-Digit Security PIN Option */}
+      <div className="px-4 py-3 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+          <Lock className="h-4 w-4 text-indigo-400" />
+          <span>4-Digit Security PIN (Optional)</span>
+        </div>
+        <input
+          type="password"
+          maxLength={4}
+          placeholder="e.g. 4829"
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          className="w-24 px-3 py-1.5 text-center bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-xs focus:border-indigo-500 focus:outline-none transition"
+        />
       </div>
 
       {isVerified && (
@@ -196,8 +189,56 @@ export const SenderView = ({
         </div>
       )}
 
+      {/* Active Transfer Stream Controls */}
+      {roomCode && (
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-purple-500/40 flex items-center justify-between gap-4 animate-in fade-in duration-200">
+          <div>
+            <span className="text-[10px] font-mono text-purple-400 uppercase font-bold block">ACTIVE ROOM CODE</span>
+            <span className="text-xl font-extrabold font-mono text-white tracking-widest">{roomCode}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {activePaused ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setLocalPaused(false);
+                  onResume?.();
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-emerald-600/20 animate-pulse"
+              >
+                <Play className="h-4 w-4 fill-current" />
+                <span>Resume Stream</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setLocalPaused(true);
+                  onPause?.();
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Pause className="h-4 w-4 fill-current" />
+                <span>Pause Stream</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsQrOpen(true)}
+              className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center cursor-pointer"
+              title="View QR Code"
+            >
+              <QrCode className="h-5 w-5 text-indigo-400" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-4">
         <button
+          type="button"
           onClick={() => {
             onCreateSession(pin, autoDestruct, customCode);
             setIsQrOpen(true);
@@ -207,16 +248,6 @@ export const SenderView = ({
           <Zap className="h-5 w-5" />
           Create Transfer Session →
         </button>
-
-        {roomCode && (
-          <button
-            onClick={() => setIsQrOpen(true)}
-            className="p-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center cursor-pointer"
-            title="View QR Code & Code"
-          >
-            <QrCode className="h-6 w-6 text-indigo-400" />
-          </button>
-        )}
       </div>
 
       <QRCodeModal

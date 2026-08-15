@@ -97,7 +97,7 @@ export default function Home() {
         loadVaultHistory(currentSessionUser.email);
       }
     });
-  }, [roomCode]);
+  }, []);
 
   useEffect(() => {
     if (user?.email) {
@@ -314,6 +314,17 @@ export default function Home() {
                       roomCode={roomCode}
                       onCreateSession={handleCreateSession}
                       isVerified={user?.emailVerified}
+                      isPaused={progress?.isPaused || progress?.status === 'paused'}
+                      onPause={() => {
+                        if (typeof managerRef.current?.pauseTransfer === 'function') {
+                          managerRef.current.pauseTransfer();
+                        }
+                      }}
+                      onResume={() => {
+                        if (typeof managerRef.current?.resumeTransfer === 'function') {
+                          managerRef.current.resumeTransfer();
+                        }
+                      }}
                     />
                   ) : (
                     <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
@@ -325,6 +336,16 @@ export default function Home() {
                         progress={progress}
                         fileName={selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(', ') : receivedFile?.metadata.fileName || 'Encrypted File Stream'}
                         fileSize={selectedFiles.reduce((acc, f) => acc + f.size, 0) || receivedFile?.metadata.fileSize || 0}
+                        onPause={() => {
+                          if (typeof managerRef.current?.pauseTransfer === 'function') {
+                            managerRef.current.pauseTransfer();
+                          }
+                        }}
+                        onResume={() => {
+                          if (typeof managerRef.current?.resumeTransfer === 'function') {
+                            managerRef.current.resumeTransfer();
+                          }
+                        }}
                       />
                     </div>
                   )}
@@ -411,6 +432,17 @@ export default function Home() {
                       roomCode={roomCode}
                       onCreateSession={handleCreateSession}
                       isVerified={false}
+                      isPaused={progress?.isPaused || progress?.status === 'paused'}
+                      onPause={() => {
+                        if (typeof managerRef.current?.pauseTransfer === 'function') {
+                          managerRef.current.pauseTransfer();
+                        }
+                      }}
+                      onResume={() => {
+                        if (typeof managerRef.current?.resumeTransfer === 'function') {
+                          managerRef.current.resumeTransfer();
+                        }
+                      }}
                     />
                   ) : (
                     <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
@@ -422,6 +454,16 @@ export default function Home() {
                         progress={progress}
                         fileName={selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(', ') : receivedFile?.metadata.fileName || 'Encrypted File Stream'}
                         fileSize={selectedFiles.reduce((acc, f) => acc + f.size, 0) || receivedFile?.metadata.fileSize || 0}
+                        onPause={() => {
+                          if (typeof managerRef.current?.pauseTransfer === 'function') {
+                            managerRef.current.pauseTransfer();
+                          }
+                        }}
+                        onResume={() => {
+                          if (typeof managerRef.current?.resumeTransfer === 'function') {
+                            managerRef.current.resumeTransfer();
+                          }
+                        }}
                       />
                     </div>
                   )}

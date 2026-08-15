@@ -35,8 +35,13 @@ export class P2PTransferManager {
     this.roomId = '';
     this.isSender = false;
     this.isThrottled = false;
+    this.isPaused = false;
+    this.currentChunkIndex = 0;
     this.pin = '';
     this.autoDestruct = false;
+
+    /** @type {import('@cipherstream/types').TransferProgress | null} */
+    this.lastProgress = null;
 
     /** @type {((progress: import('@cipherstream/types').TransferProgress) => void) | undefined} */
     this.onProgressCallback = undefined;
@@ -320,6 +325,20 @@ export class P2PTransferManager {
         if (msg.type === 'METADATA') {
           this.currentMetadata = msg.metadata;
           this.receivedBuffers = [];
+        } else if (msg.type === 'CONTROL') {
+          if (msg.action === 'PAUSE') {
+            this.isPaused = true;
+            if (this.lastProgress && this.onProgressCallback) {
+              this.lastProgress = { ...this.lastProgress, status: 'paused', isPaused: true };
+              this.onProgressCallback(this.lastProgress);
+            }
+          } else if (msg.action === 'RESUME') {
+            this.isPaused = false;
+            if (this.lastProgress && this.onProgressCallback) {
+              this.lastProgress = { ...this.lastProgress, status: 'streaming', isPaused: false };
+              this.onProgressCallback(this.lastProgress);
+            }
+          }
         }
       } else if (event.data instanceof ArrayBuffer) {
         try {
@@ -328,17 +347,20 @@ export class P2PTransferManager {
 
           if (this.currentMetadata && this.onProgressCallback) {
             const totalReceived = this.receivedBuffers.reduce((acc, b) => acc + b.byteLength, 0);
-            this.onProgressCallback({
+            const progData = {
               fileId: this.currentMetadata.fileId,
               bytesTransferred: totalReceived,
               totalBytes: this.currentMetadata.fileSize,
               chunksCompleted: this.receivedBuffers.length,
               totalChunks: this.currentMetadata.totalChunks,
-              speedBps: 2.5 * 1024 * 1024,
-              etaSeconds: Math.ceil((this.currentMetadata.fileSize - totalReceived) / (2.5 * 1024 * 1024)),
-              status: totalReceived >= this.currentMetadata.fileSize ? 'completed' : 'streaming',
+              speedBps: this.isPaused ? 0 : 2.5 * 1024 * 1024,
+              etaSeconds: this.isPaused ? 0 : Math.ceil((this.currentMetadata.fileSize - totalReceived) / (2.5 * 1024 * 1024)),
+              status: totalReceived >= this.currentMetadata.fileSize ? 'completed' : this.isPaused ? 'paused' : 'streaming',
               isThrottled: this.isThrottled,
-            });
+              isPaused: this.isPaused,
+            };
+            this.lastProgress = progData;
+            this.onProgressCallback(progData);
 
             if (totalReceived >= this.currentMetadata.fileSize) {
               audioSynth.playTransferCompleteChime();
@@ -420,6 +442,11 @@ export class P2PTransferManager {
       this.dataChannel.send(JSON.stringify({ type: 'METADATA', metadata }));
 
       for (let i = 0; i < totalChunks; i++) {
+        while (this.isPaused) {
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        this.currentChunkIndex = i;
+
         if (this.isThrottled) {
           await new Promise((r) => setTimeout(r, 40));
         }
@@ -439,20 +466,85 @@ export class P2PTransferManager {
         const elapsedSec = (Date.now() - startTime) / 1000 || 0.1;
         const speedBps = totalBytesSent / elapsedSec;
 
-        onProgress?.({
+        const progData = {
           fileId: `${file.name} (${fIdx + 1}/${fileList.length})`,
           bytesTransferred: totalBytesSent,
           totalBytes: grandTotalBytes,
           chunksCompleted: i + 1,
           totalChunks: Math.ceil(grandTotalBytes / CHUNK_SIZE),
-          speedBps,
-          etaSeconds: Math.ceil((grandTotalBytes - totalBytesSent) / (speedBps || 1)),
-          status: totalBytesSent >= grandTotalBytes ? 'completed' : 'streaming',
+          speedBps: this.isPaused ? 0 : speedBps,
+          etaSeconds: this.isPaused ? 0 : Math.ceil((grandTotalBytes - totalBytesSent) / (speedBps || 1)),
+          status: totalBytesSent >= grandTotalBytes ? 'completed' : this.isPaused ? 'paused' : 'streaming',
           isThrottled: this.isThrottled,
-        });
+          isPaused: this.isPaused,
+        };
+        this.lastProgress = progData;
+        onProgress?.(progData);
       }
     }
     this.isTransferring = false;
+  }
+
+  pauseTransfer() {
+    this.isPaused = true;
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+      try {
+        this.dataChannel.send(JSON.stringify({ type: 'CONTROL', action: 'PAUSE' }));
+      } catch (err) {
+        console.warn('[P2P] Could not send CONTROL PAUSE:', err);
+      }
+    }
+    const currentProg = this.lastProgress || {
+      fileId: 'File Stream',
+      bytesTransferred: 0,
+      totalBytes: 1,
+      chunksCompleted: 0,
+      totalChunks: 1,
+      speedBps: 0,
+      etaSeconds: 0,
+      status: 'paused',
+      isThrottled: this.isThrottled,
+      isPaused: true,
+    };
+    this.lastProgress = {
+      ...currentProg,
+      status: 'paused',
+      isPaused: true,
+    };
+    if (this.onProgressCallback) {
+      this.onProgressCallback(this.lastProgress);
+    }
+  }
+
+  resumeTransfer() {
+    this.isPaused = false;
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+      try {
+        this.dataChannel.send(JSON.stringify({ type: 'CONTROL', action: 'RESUME' }));
+      } catch (err) {
+        console.warn('[P2P] Could not send CONTROL RESUME:', err);
+      }
+    }
+    const currentProg = this.lastProgress || {
+      fileId: 'File Stream',
+      bytesTransferred: 0,
+      totalBytes: 1,
+      chunksCompleted: 0,
+      totalChunks: 1,
+      speedBps: 0,
+      etaSeconds: 0,
+      status: 'streaming',
+      isThrottled: this.isThrottled,
+      isPaused: false,
+    };
+    this.lastProgress = {
+      ...currentProg,
+      status: 'streaming',
+      isPaused: false,
+    };
+    if (this.onProgressCallback) {
+      this.onProgressCallback(this.lastProgress);
+    }
   }
 
   /**
