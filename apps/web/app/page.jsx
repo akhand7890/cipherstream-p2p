@@ -281,7 +281,10 @@ export default function Home() {
           <DashboardNavbar
             user={user}
             activeTab={dashboardTab}
-            onSelectTab={(tab) => setDashboardTab(tab)}
+            onSelectTab={(tab) => {
+              setDashboardTab(tab);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             onLogout={handleLogout}
             onOpenVerifyModal={() => setIsVerifyModalOpen(true)}
           />
@@ -289,56 +292,52 @@ export default function Home() {
           <Navbar onLogin={openLoginModal} onSignUp={openSignupModal} />
         )}
 
-        {/* Main Homepage Container */}
-        <main className="max-w-7xl mx-auto px-6 py-8 space-y-16 relative z-10">
-          {/* Hero Section */}
-          <Hero onSendFiles={openSender} onJoinSession={openReceiver} />
+        {/* Main Application Container */}
+        <main className="max-w-7xl mx-auto px-6 py-8 relative z-10">
+          {/* AUTHENTICATED USER WORKSPACE */}
+          {user ? (
+            <div className="space-y-8">
+              {/* Interactive Transfer Engine Drawer */}
+              {mode && (
+                <div ref={transferSectionRef} className="max-w-3xl mx-auto glass-panel p-8 rounded-3xl border border-purple-500/40 relative shadow-2xl animate-in zoom-in-95 duration-300">
+                  <button
+                    onClick={() => setMode(null)}
+                    className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/60 text-slate-400 hover:text-white transition cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
 
-          {/* Interactive Transfer Engine Drawer */}
-          {mode && (
-            <div ref={transferSectionRef} className="max-w-3xl mx-auto glass-panel p-8 rounded-3xl border border-purple-500/40 relative shadow-2xl animate-in zoom-in-95 duration-300">
-              <button
-                onClick={() => setMode(null)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/60 text-slate-400 hover:text-white transition cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+                  {mode === 'sender' ? (
+                    <SenderView
+                      onFilesSelect={(files) => setSelectedFiles(files)}
+                      selectedFiles={selectedFiles}
+                      roomCode={roomCode}
+                      onCreateSession={handleCreateSession}
+                      isVerified={user?.emailVerified}
+                    />
+                  ) : (
+                    <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
+                  )}
 
-              {mode === 'sender' ? (
-                <SenderView
-                  onFilesSelect={(files) => setSelectedFiles(files)}
-                  selectedFiles={selectedFiles}
-                  roomCode={roomCode}
-                  onCreateSession={handleCreateSession}
-                  isVerified={user?.emailVerified}
-                />
-              ) : (
-                <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
-              )}
-
-              {progress && (
-                <div className="mt-8">
-                  <TransferProgress
-                    progress={progress}
-                    fileName={selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(', ') : receivedFile?.metadata.fileName || 'Encrypted File Stream'}
-                    fileSize={selectedFiles.reduce((acc, f) => acc + f.size, 0) || receivedFile?.metadata.fileSize || 0}
-                  />
+                  {progress && (
+                    <div className="mt-8">
+                      <TransferProgress
+                        progress={progress}
+                        fileName={selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(', ') : receivedFile?.metadata.fileName || 'Encrypted File Stream'}
+                        fileSize={selectedFiles.reduce((acc, f) => acc + f.size, 0) || receivedFile?.metadata.fileSize || 0}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Authenticated Dashboard Subpages */}
-          {user && (
-            <div className="space-y-6 pt-4" id="dashboard">
+              {/* Dedicated Active Tab View */}
               {dashboardTab === 'sessions' && (
-                <div className="space-y-8">
-                  <MySessionsView
-                    user={user}
-                    roomCode={roomCode}
-                    onOpenSender={openSender}
-                    onOpenReceiver={openReceiver}
-                  />
+                <div className="space-y-16">
+                  {/* Hero Section */}
+                  <Hero onSendFiles={openSender} onJoinSession={openReceiver} />
+
+                  {/* User Account Dashboard & Transfer History Vault */}
                   <UserDashboard
                     user={user}
                     transferHistory={transferHistory}
@@ -346,6 +345,23 @@ export default function Home() {
                     onReShare={handleReShare}
                     onClearHistory={handleClearVaultHistory}
                   />
+
+                  {/* 4 Core Value Pillars */}
+                  <ValuePillars />
+
+                  {/* Bottom Grid: How It Works & Security Specs + Live Telemetry */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-8 border-t border-slate-800/80">
+                    {/* Left 2 Columns: How It Works Timeline */}
+                    <div className="lg:col-span-2 space-y-8">
+                      <HowItWorksTimeline />
+                    </div>
+
+                    {/* Right Column: Security Specs & Live Telemetry Dashboard */}
+                    <div className="space-y-6">
+                      <TechSpecsCard />
+                      <TelemetryWidget progress={progress} />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -372,24 +388,64 @@ export default function Home() {
                 />
               )}
             </div>
+          ) : (
+            /* PUBLIC MARKETING LANDING PAGE (When Logged Out) */
+            <div className="space-y-16">
+              {/* Hero Section */}
+              <Hero onSendFiles={openSender} onJoinSession={openReceiver} />
+
+              {/* Interactive Transfer Engine Drawer for Unauthenticated Users */}
+              {mode && (
+                <div ref={transferSectionRef} className="max-w-3xl mx-auto glass-panel p-8 rounded-3xl border border-purple-500/40 relative shadow-2xl animate-in zoom-in-95 duration-300">
+                  <button
+                    onClick={() => setMode(null)}
+                    className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/60 text-slate-400 hover:text-white transition cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+
+                  {mode === 'sender' ? (
+                    <SenderView
+                      onFilesSelect={(files) => setSelectedFiles(files)}
+                      selectedFiles={selectedFiles}
+                      roomCode={roomCode}
+                      onCreateSession={handleCreateSession}
+                      isVerified={false}
+                    />
+                  ) : (
+                    <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
+                  )}
+
+                  {progress && (
+                    <div className="mt-8">
+                      <TransferProgress
+                        progress={progress}
+                        fileName={selectedFiles.length > 0 ? selectedFiles.map(f => f.name).join(', ') : receivedFile?.metadata.fileName || 'Encrypted File Stream'}
+                        fileSize={selectedFiles.reduce((acc, f) => acc + f.size, 0) || receivedFile?.metadata.fileSize || 0}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 4 Core Value Pillars */}
+              <ValuePillars />
+
+              {/* Bottom Grid: How It Works & Security Specs + Live Telemetry */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-8 border-t border-slate-800/80">
+                {/* Left 2 Columns: How It Works Timeline */}
+                <div className="lg:col-span-2 space-y-8">
+                  <HowItWorksTimeline />
+                </div>
+
+                {/* Right Column: Security Specs & Live Telemetry Dashboard */}
+                <div className="space-y-6">
+                  <TechSpecsCard />
+                  <TelemetryWidget progress={progress} />
+                </div>
+              </div>
+            </div>
           )}
-
-          {/* 4 Core Value Pillars */}
-          <ValuePillars />
-
-          {/* Bottom Grid: How It Works & Security Specs + Live Telemetry */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-8 border-t border-slate-800/80">
-            {/* Left 2 Columns: How It Works Timeline */}
-            <div className="lg:col-span-2 space-y-8">
-              <HowItWorksTimeline />
-            </div>
-
-            {/* Right Column: Security Specs & Live Telemetry Dashboard */}
-            <div className="space-y-6">
-              <TechSpecsCard />
-              <TelemetryWidget progress={progress} />
-            </div>
-          </div>
         </main>
       </div>
 
