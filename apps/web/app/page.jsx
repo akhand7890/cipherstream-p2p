@@ -13,12 +13,18 @@ import { AuthModal } from '@/components/AuthModal';
 import { ErrorModal } from '@/components/ErrorModal';
 import { VerifyEmailModal } from '@/components/VerifyEmailModal';
 import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
+import { TransferHistoryModal } from '@/components/TransferHistoryModal';
 import { UserDashboard } from '@/components/UserDashboard';
+import { MySessionsView } from '@/components/pages/MySessionsView';
+import { HistoryView } from '@/components/pages/HistoryView';
+import { SharedFilesView } from '@/components/pages/SharedFilesView';
+import { SettingsView } from '@/components/pages/SettingsView';
 import { SenderView } from '@/components/SenderView';
 import { ReceiverView } from '@/components/ReceiverView';
 import { TransferProgress } from '@/components/TransferProgress';
 import { P2PTransferManager } from '@/lib/webrtc';
 import { getStoredSession, saveSession, clearStoredSession, markEmailVerified } from '@/lib/authDb';
+import { recordTransfer, getTransferHistory, clearTransferHistory } from '@/lib/transferVault';
 import { X } from 'lucide-react';
 
 export default function Home() {
@@ -27,6 +33,9 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [dashboardTab, setDashboardTab] = useState('sessions'); // 'sessions' | 'history' | 'shared' | 'settings'
+  const [transferHistory, setTransferHistory] = useState([]);
 
   const [mode, setMode] = useState(null); // null | 'sender' | 'receiver'
   const [isConnected, setIsConnected] = useState(false);
@@ -42,11 +51,18 @@ export default function Home() {
   const managerRef = useRef(null);
   const transferSectionRef = useRef(null);
 
+  const loadVaultHistory = async (email) => {
+    if (!email) return;
+    const history = await getTransferHistory(email);
+    setTransferHistory(history);
+  };
+
   useEffect(() => {
     // Restore persistent session on startup
     const activeSession = getStoredSession();
     if (activeSession) {
       setUser(activeSession);
+      loadVaultHistory(activeSession.email);
     }
 
     managerRef.current = new P2PTransferManager();
@@ -59,7 +75,7 @@ export default function Home() {
       setIsLoading(false);
       setErrorMessage(msg);
     });
-    managerRef.current.setOnFileReceived((blob, metadata) => {
+    managerRef.current.setOnFileReceived(async (blob, metadata) => {
       setReceivedFile({ blob, metadata });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -67,8 +83,29 @@ export default function Home() {
       a.download = metadata.fileName;
       a.click();
       URL.revokeObjectURL(url);
+
+      const currentSessionUser = getStoredSession();
+      if (currentSessionUser?.email) {
+        await recordTransfer({
+          email: currentSessionUser.email,
+          roomCode: roomCode || 'DIRECT_P2P',
+          files: [{ name: metadata.fileName, size: metadata.fileSize }],
+          type: 'RECEIVED',
+          pinProtected: false,
+          autoDestruct: false,
+        });
+        loadVaultHistory(currentSessionUser.email);
+      }
     });
-  }, []);
+  }, [roomCode]);
+
+  useEffect(() => {
+    if (user?.email) {
+      loadVaultHistory(user.email);
+    } else {
+      setTransferHistory([]);
+    }
+  }, [user?.email]);
 
   const handleCreateSession = (pin = '', autoDestruct = false, customCode = '') => {
     if (!user) {
@@ -77,16 +114,43 @@ export default function Home() {
     }
     if (!managerRef.current) return;
     managerRef.current.createRoom(
-      (code) => {
+      async (code) => {
         setRoomCode(code);
         if (selectedFiles.length > 0) {
           managerRef.current?.sendFiles(selectedFiles, (prog) => setProgress(prog));
+
+          if (user?.email) {
+            await recordTransfer({
+              email: user.email,
+              roomCode: code,
+              files: selectedFiles,
+              type: 'SENT',
+              pinProtected: !!pin,
+              autoDestruct,
+            });
+            loadVaultHistory(user.email);
+          }
         }
       },
       pin,
       autoDestruct,
       customCode
     );
+  };
+
+  const handleReShare = (code) => {
+    setRoomCode(code);
+    setMode('sender');
+    setTimeout(() => {
+      transferSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handleClearVaultHistory = () => {
+    if (user?.email) {
+      clearTransferHistory(user.email);
+      setTransferHistory([]);
+    }
   };
 
   /**
@@ -202,11 +266,22 @@ export default function Home() {
         }}
       />
 
+      {/* Transfer History Modal */}
+      <TransferHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        transferHistory={transferHistory}
+        onReShare={handleReShare}
+        onClearHistory={handleClearVaultHistory}
+      />
+
       <div>
         {/* Top Navbar: Switches between Public & Authenticated State */}
         {user ? (
           <DashboardNavbar
             user={user}
+            activeTab={dashboardTab}
+            onSelectTab={(tab) => setDashboardTab(tab)}
             onLogout={handleLogout}
             onOpenVerifyModal={() => setIsVerifyModalOpen(true)}
           />
@@ -253,10 +328,49 @@ export default function Home() {
             </div>
           )}
 
-          {/* Authenticated Dashboard View (when logged in) */}
+          {/* Authenticated Dashboard Subpages */}
           {user && (
-            <div className="space-y-6 pt-4">
-              <UserDashboard user={user} onOpenVerifyModal={() => setIsVerifyModalOpen(true)} />
+            <div className="space-y-6 pt-4" id="dashboard">
+              {dashboardTab === 'sessions' && (
+                <div className="space-y-8">
+                  <MySessionsView
+                    user={user}
+                    roomCode={roomCode}
+                    onOpenSender={openSender}
+                    onOpenReceiver={openReceiver}
+                  />
+                  <UserDashboard
+                    user={user}
+                    transferHistory={transferHistory}
+                    onOpenVerifyModal={() => setIsVerifyModalOpen(true)}
+                    onReShare={handleReShare}
+                    onClearHistory={handleClearVaultHistory}
+                  />
+                </div>
+              )}
+
+              {dashboardTab === 'history' && (
+                <HistoryView
+                  transferHistory={transferHistory}
+                  onReShare={handleReShare}
+                  onClearHistory={handleClearVaultHistory}
+                />
+              )}
+
+              {dashboardTab === 'shared' && (
+                <SharedFilesView
+                  transferHistory={transferHistory}
+                  onReShare={handleReShare}
+                />
+              )}
+
+              {dashboardTab === 'settings' && (
+                <SettingsView
+                  user={user}
+                  onOpenVerifyModal={() => setIsVerifyModalOpen(true)}
+                  onClearHistory={handleClearVaultHistory}
+                />
+              )}
             </div>
           )}
 
