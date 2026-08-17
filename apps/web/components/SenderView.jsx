@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play, Folder, FolderPlus, Users } from 'lucide-react';
+import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play, Folder, FolderPlus, Users, Copy } from 'lucide-react';
 import { QRCodeModal } from './QRCodeModal';
 import { traverseDataTransferItems, normalizeDirectoryFiles } from '../lib/directoryTree';
 
@@ -33,6 +33,7 @@ export const SenderView = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [localPaused, setLocalPaused] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [pin, setPin] = useState('');
   const [customCode, setCustomCode] = useState('');
   const [autoDestruct, setAutoDestruct] = useState(false);
@@ -77,6 +78,12 @@ export const SenderView = ({
     typeof window !== 'undefined'
       ? `${window.location.origin}/join?code=${roomCode || '849201'}`
       : `https://cipherstream.app/join?code=${roomCode || '849201'}`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(joinUrl);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2500);
+  };
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -254,6 +261,25 @@ export const SenderView = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="px-3 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/40 text-purple-300 transition flex items-center gap-1.5 cursor-pointer text-xs font-bold font-mono"
+                title="Copy Shareable Join Link"
+              >
+                {isCopied ? (
+                  <>
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5 text-purple-400" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+
               {activePaused ? (
                 <button
                   type="button"
