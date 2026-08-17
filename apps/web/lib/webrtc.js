@@ -12,13 +12,20 @@ const CHUNK_SIZE = 64 * 1024; // 64KB chunks
 const BUFFER_HIGH_WATERMARK = 1024 * 1024; // 1MB backpressure threshold
 
 /**
- * P2PTransferManager — Client WebRTC DataChannel & Web Crypto E2EE Engine
+ * P2PTransferManager — Client WebRTC DataChannel Mesh & Web Crypto E2EE Engine
  * JavaScript + JSDoc Annotated (Zero-Build Type Safety)
  */
 export class P2PTransferManager {
   constructor() {
     /** @type {WebSocket | null} */
     this.ws = null;
+
+    /** @type {Map<string, RTCPeerConnection>} */
+    this.peerConnections = new Map();
+    /** @type {Map<string, RTCDataChannel>} */
+    this.dataChannels = new Map();
+
+    // Fallback single connection for single-peer compatibility
     /** @type {RTCPeerConnection | null} */
     this.pc = null;
     /** @type {RTCDataChannel | null} */
@@ -39,6 +46,7 @@ export class P2PTransferManager {
     this.currentChunkIndex = 0;
     this.pin = '';
     this.autoDestruct = false;
+    this.peerCount = 0;
 
     /** @type {import('@cipherstream/types').TransferProgress | null} */
     this.lastProgress = null;
@@ -49,6 +57,8 @@ export class P2PTransferManager {
     this.onFileReceivedCallback = undefined;
     /** @type {((errorMsg: string) => void) | undefined} */
     this.onErrorCallback = undefined;
+    /** @type {((peerCount: number, peerList: string[]) => void) | undefined} */
+    this.onPeersUpdateCallback = undefined;
 
     /** @type {ArrayBuffer[]} */
     this.receivedBuffers = [];
@@ -198,23 +208,32 @@ export class P2PTransferManager {
         break;
       }
 
-      case SignalingEventType.ROOM_JOINED:
+      case SignalingEventType.ROOM_JOINED: {
         audioSynth.playPeerConnectedChime();
+        const peerId = message.payload?.peerId || 'default_peer';
+        const peerCount = message.payload?.peerCount || 1;
+        this.peerCount = peerCount;
+        this.onPeersUpdateCallback?.(this.peerCount, Array.from(this.dataChannels.keys()));
+
         if (this.isSender) {
+          // Send ECDH Public Key targeting new receiver peer
           this.ws?.send(
             JSON.stringify({
               event: SignalingEventType.ECDH_PUBLIC_KEY,
               roomId: this.roomId,
-              payload: { publicKeyJwk: this.ownPublicKeyJwk },
+              targetPeerId: peerId,
+              payload: { publicKeyJwk: this.ownPublicKeyJwk, peerId },
               timestamp: Date.now(),
             })
           );
-          this.initWebRTCPeer(true);
+          this.initWebRTCPeer(true, peerId);
         }
         break;
+      }
 
-      case SignalingEventType.ECDH_PUBLIC_KEY:
+      case SignalingEventType.ECDH_PUBLIC_KEY: {
         const peerJwk = message.payload.publicKeyJwk;
+        const targetPeerId = message.payload.peerId || 'default_peer';
         const peerPublicKey = await importPeerPublicKey(peerJwk);
         this.aesKey = await deriveSharedAESKey(this.ownKeyPair.privateKey, peerPublicKey, this.pin || '');
         console.log('[P2P] E2EE AES-256-GCM Key Derived Successfully!');
@@ -228,60 +247,89 @@ export class P2PTransferManager {
               timestamp: Date.now(),
             })
           );
-          this.initWebRTCPeer(false);
+          this.initWebRTCPeer(false, targetPeerId);
         } else {
           this.tryStartPendingTransfer();
         }
         break;
+      }
 
-      case SignalingEventType.SIGNAL_OFFER:
-        if (!this.isSender && this.pc) {
-          await this.pc.setRemoteDescription(new RTCSessionDescription(message.payload.sdp));
-          const answer = await this.pc.createAnswer();
-          await this.pc.setLocalDescription(answer);
+      case SignalingEventType.SIGNAL_OFFER: {
+        const targetPeerId = message.payload?.peerId || message.targetPeerId || 'default_peer';
+        let pc = this.peerConnections.get(targetPeerId) || this.pc;
+        if (!this.isSender && pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(message.payload.sdp));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
           this.ws?.send(
             JSON.stringify({
               event: SignalingEventType.SIGNAL_ANSWER,
               roomId: this.roomId,
-              payload: { sdp: answer },
+              targetPeerId,
+              payload: { sdp: answer, peerId: targetPeerId },
               timestamp: Date.now(),
             })
           );
         }
         break;
+      }
 
-      case SignalingEventType.SIGNAL_ANSWER:
-        if (this.isSender && this.pc) {
-          await this.pc.setRemoteDescription(new RTCSessionDescription(message.payload.sdp));
+      case SignalingEventType.SIGNAL_ANSWER: {
+        const targetPeerId = message.payload?.peerId || message.targetPeerId || 'default_peer';
+        const pc = this.peerConnections.get(targetPeerId) || this.pc;
+        if (this.isSender && pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(message.payload.sdp));
         }
         break;
+      }
 
-      case SignalingEventType.SIGNAL_ICE_CANDIDATE:
-        if (this.pc) {
-          await this.pc.addIceCandidate(new RTCIceCandidate(message.payload.candidate));
+      case SignalingEventType.SIGNAL_ICE_CANDIDATE: {
+        const targetPeerId = message.payload?.peerId || message.targetPeerId || 'default_peer';
+        const pc = this.peerConnections.get(targetPeerId) || this.pc;
+        if (pc) {
+          await pc.addIceCandidate(new RTCIceCandidate(message.payload.candidate));
         }
         break;
+      }
+
+      case SignalingEventType.PEER_DISCONNECTED: {
+        const pId = message.payload?.peerId;
+        if (pId) {
+          const pc = this.peerConnections.get(pId);
+          pc?.close();
+          this.peerConnections.delete(pId);
+          this.dataChannels.delete(pId);
+          this.peerCount = message.payload?.peerCount || this.dataChannels.size;
+          this.onPeersUpdateCallback?.(this.peerCount, Array.from(this.dataChannels.keys()));
+        }
+        break;
+      }
     }
   }
 
   /**
    * @param {boolean} isOffer
+   * @param {string} [peerId='default_peer']
    */
-  initWebRTCPeer(isOffer) {
-    this.pc = new RTCPeerConnection({
+  initWebRTCPeer(isOffer, peerId = 'default_peer') {
+    const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
       ],
     });
 
-    this.pc.onicecandidate = (event) => {
+    this.peerConnections.set(peerId, pc);
+    this.pc = pc; // fallback reference
+
+    pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.ws?.send(
           JSON.stringify({
             event: SignalingEventType.SIGNAL_ICE_CANDIDATE,
             roomId: this.roomId,
-            payload: { candidate: event.candidate },
+            targetPeerId: peerId,
+            payload: { candidate: event.candidate, peerId },
             timestamp: Date.now(),
           })
         );
@@ -289,37 +337,48 @@ export class P2PTransferManager {
     };
 
     if (isOffer) {
-      this.dataChannel = this.pc.createDataChannel('fileTransfer', { ordered: true });
-      this.setupDataChannel();
-      this.pc.createOffer().then(async (offer) => {
-        await this.pc.setLocalDescription(offer);
+      const dc = pc.createDataChannel('fileTransfer', { ordered: true });
+      this.dataChannels.set(peerId, dc);
+      this.dataChannel = dc; // fallback reference
+      this.setupDataChannel(dc, peerId);
+
+      pc.createOffer().then(async (offer) => {
+        await pc.setLocalDescription(offer);
         this.ws?.send(
           JSON.stringify({
             event: SignalingEventType.SIGNAL_OFFER,
             roomId: this.roomId,
-            payload: { sdp: offer },
+            targetPeerId: peerId,
+            payload: { sdp: offer, peerId },
             timestamp: Date.now(),
           })
         );
       });
     } else {
-      this.pc.ondatachannel = (event) => {
-        this.dataChannel = event.channel;
-        this.setupDataChannel();
+      pc.ondatachannel = (event) => {
+        const dc = event.channel;
+        this.dataChannels.set(peerId, dc);
+        this.dataChannel = dc;
+        this.setupDataChannel(dc, peerId);
       };
     }
   }
 
-  setupDataChannel() {
-    if (!this.dataChannel) return;
-    this.dataChannel.binaryType = 'arraybuffer';
+  /**
+   * @param {RTCDataChannel} dc
+   * @param {string} peerId
+   */
+  setupDataChannel(dc, peerId) {
+    if (!dc) return;
+    dc.binaryType = 'arraybuffer';
 
-    this.dataChannel.onopen = async () => {
-      console.log('[P2P] WebRTC DataChannel Opened & Ready!');
+    dc.onopen = async () => {
+      console.log(`[P2P] WebRTC DataChannel Opened for Peer ${peerId}!`);
+      this.onPeersUpdateCallback?.(this.dataChannels.size, Array.from(this.dataChannels.keys()));
       this.tryStartPendingTransfer();
     };
 
-    this.dataChannel.onmessage = async (event) => {
+    dc.onmessage = async (event) => {
       if (typeof event.data === 'string') {
         const msg = JSON.parse(event.data);
         if (msg.type === 'METADATA') {
@@ -358,6 +417,7 @@ export class P2PTransferManager {
               status: totalReceived >= this.currentMetadata.fileSize ? 'completed' : this.isPaused ? 'paused' : 'streaming',
               isThrottled: this.isThrottled,
               isPaused: this.isPaused,
+              peerCount: this.dataChannels.size || 1,
             };
             this.lastProgress = progData;
             this.onProgressCallback(progData);
@@ -380,13 +440,13 @@ export class P2PTransferManager {
   }
 
   tryStartPendingTransfer() {
+    const hasOpenChannel = Array.from(this.dataChannels.values()).some((dc) => dc.readyState === 'open');
     if (
       this.isSender &&
       this.pendingFiles &&
       this.pendingFiles.length > 0 &&
       this.aesKey &&
-      this.dataChannel &&
-      this.dataChannel.readyState === 'open' &&
+      hasOpenChannel &&
       !this.isTransferring
     ) {
       this.isTransferring = true;
@@ -417,7 +477,9 @@ export class P2PTransferManager {
    * @param {(progress: import('@cipherstream/types').TransferProgress) => void} [onProgress]
    */
   async startChunkedTransfer(files, onProgress) {
-    if (!this.dataChannel || !this.aesKey) return;
+    const openChannels = Array.from(this.dataChannels.values()).filter((dc) => dc.readyState === 'open');
+    if (openChannels.length === 0 || !this.aesKey) return;
+
     const fileList = Array.isArray(files) ? files : [files];
     if (fileList.length === 0) return;
 
@@ -440,7 +502,12 @@ export class P2PTransferManager {
         relativePath: file.relativePath || file.webkitRelativePath || file.name,
       };
 
-      this.dataChannel.send(JSON.stringify({ type: 'METADATA', metadata }));
+      // Broadcast metadata header to all connected receivers in parallel
+      for (const dc of this.dataChannels.values()) {
+        if (dc.readyState === 'open') {
+          dc.send(JSON.stringify({ type: 'METADATA', metadata }));
+        }
+      }
 
       for (let i = 0; i < totalChunks; i++) {
         while (this.isPaused) {
@@ -452,16 +519,21 @@ export class P2PTransferManager {
           await new Promise((r) => setTimeout(r, 40));
         }
 
-        while (this.dataChannel.bufferedAmount > BUFFER_HIGH_WATERMARK) {
-          await new Promise((r) => setTimeout(r, 15));
-        }
-
         const start = i * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunkBuffer = await file.slice(start, end).arrayBuffer();
         const encryptedBuffer = await encryptChunk(chunkBuffer, this.aesKey);
 
-        this.dataChannel.send(encryptedBuffer);
+        // Multi-Peer DataChannel Mesh Parallel Broadcast
+        for (const dc of this.dataChannels.values()) {
+          if (dc.readyState === 'open') {
+            while (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
+              await new Promise((r) => setTimeout(r, 15));
+            }
+            dc.send(encryptedBuffer);
+          }
+        }
+
         totalBytesSent += (end - start);
 
         const elapsedSec = (Date.now() - startTime) / 1000 || 0.1;
@@ -479,6 +551,7 @@ export class P2PTransferManager {
           isThrottled: this.isThrottled,
           isPaused: this.isPaused,
           isFolder: fileList.some((f) => f.relativePath && f.relativePath.includes('/')),
+          peerCount: this.dataChannels.size || 1,
         };
         this.lastProgress = progData;
         onProgress?.(progData);
@@ -489,11 +562,13 @@ export class P2PTransferManager {
 
   pauseTransfer() {
     this.isPaused = true;
-    if (this.dataChannel && this.dataChannel.readyState === 'open') {
-      try {
-        this.dataChannel.send(JSON.stringify({ type: 'CONTROL', action: 'PAUSE' }));
-      } catch (err) {
-        console.warn('[P2P] Could not send CONTROL PAUSE:', err);
+    for (const dc of this.dataChannels.values()) {
+      if (dc.readyState === 'open') {
+        try {
+          dc.send(JSON.stringify({ type: 'CONTROL', action: 'PAUSE' }));
+        } catch (err) {
+          console.warn('[P2P] Could not send CONTROL PAUSE:', err);
+        }
       }
     }
     const currentProg = this.lastProgress || {
@@ -507,6 +582,7 @@ export class P2PTransferManager {
       status: 'paused',
       isThrottled: this.isThrottled,
       isPaused: true,
+      peerCount: this.dataChannels.size || 1,
     };
     this.lastProgress = {
       ...currentProg,
@@ -520,11 +596,13 @@ export class P2PTransferManager {
 
   resumeTransfer() {
     this.isPaused = false;
-    if (this.dataChannel && this.dataChannel.readyState === 'open') {
-      try {
-        this.dataChannel.send(JSON.stringify({ type: 'CONTROL', action: 'RESUME' }));
-      } catch (err) {
-        console.warn('[P2P] Could not send CONTROL RESUME:', err);
+    for (const dc of this.dataChannels.values()) {
+      if (dc.readyState === 'open') {
+        try {
+          dc.send(JSON.stringify({ type: 'CONTROL', action: 'RESUME' }));
+        } catch (err) {
+          console.warn('[P2P] Could not send CONTROL RESUME:', err);
+        }
       }
     }
     const currentProg = this.lastProgress || {
@@ -538,6 +616,7 @@ export class P2PTransferManager {
       status: 'streaming',
       isThrottled: this.isThrottled,
       isPaused: false,
+      peerCount: this.dataChannels.size || 1,
     };
     this.lastProgress = {
       ...currentProg,
@@ -554,6 +633,13 @@ export class P2PTransferManager {
    */
   setOnProgress(cb) {
     this.onProgressCallback = cb;
+  }
+
+  /**
+   * @param {(peerCount: number, peerList: string[]) => void} cb
+   */
+  setOnPeersUpdate(cb) {
+    this.onPeersUpdateCallback = cb;
   }
 
   /**

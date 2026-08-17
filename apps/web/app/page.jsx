@@ -47,7 +47,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [receivedFile, setReceivedFile] = useState(null);
 
-  /** @type {React.MutableRefObject<P2PTransferManager | null>} */
+  const [peerCount, setPeerCount] = useState(1);
   const managerRef = useRef(null);
   const transferSectionRef = useRef(null);
 
@@ -71,6 +71,7 @@ export default function Home() {
     });
 
     managerRef.current.setOnProgress((prog) => setProgress(prog));
+    managerRef.current.setOnPeersUpdate((count) => setPeerCount(count));
     managerRef.current.setOnError((msg) => {
       setIsLoading(false);
       setErrorMessage(msg);
@@ -325,6 +326,7 @@ export default function Home() {
                           managerRef.current.resumeTransfer();
                         }
                       }}
+                      peerCount={peerCount}
                     />
                   ) : (
                     <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />
@@ -443,6 +445,7 @@ export default function Home() {
                           managerRef.current.resumeTransfer();
                         }
                       }}
+                      peerCount={peerCount}
                     />
                   ) : (
                     <ReceiverView onJoinSession={handleJoinSession} isLoading={isLoading} />

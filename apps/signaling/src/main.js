@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { SignalingEventType } from '@cipherstream/types';
 
 /**
- * Native WebSocket Signaling Gateway (JavaScript + JSDoc Annotated)
+ * Native WebSocket Signaling Gateway (1-to-Many Multi-Peer Mesh Edition)
  * Zero build step, runs natively in Node.js ES Modules
  */
 
@@ -19,11 +19,17 @@ wss.on('error', (err) => {
 });
 
 /**
+ * @typedef {Object} ReceiverPeer
+ * @property {string} peerId
+ * @property {WebSocket} socket
+ */
+
+/**
  * @typedef {Object} RoomSession
  * @property {string} roomId
  * @property {string} roomCode
- * @property {WebSocket} [senderSocket]
- * @property {WebSocket} [receiverSocket]
+ * @property {WebSocket} senderSocket
+ * @property {Map<string, ReceiverPeer>} receiverSockets
  * @property {number} createdAt
  */
 
@@ -52,6 +58,7 @@ wss.on('connection', (ws) => {
             roomId,
             roomCode,
             senderSocket: ws,
+            receiverSockets: new Map(),
             createdAt: Date.now(),
           };
 
@@ -77,7 +84,7 @@ wss.on('connection', (ws) => {
             ws.send(
               JSON.stringify({
                 event: SignalingEventType.ERROR,
-                payload: { message: 'Invalid or expired 6-digit room code.' },
+                payload: { message: 'Invalid or expired room code.' },
                 timestamp: Date.now(),
               })
             );
@@ -85,39 +92,65 @@ wss.on('connection', (ws) => {
           }
 
           const session = rooms.get(roomId);
-          session.receiverSocket = ws;
+          const peerId = `peer_${Math.random().toString(36).substring(2, 9)}`;
+          session.receiverSockets.set(peerId, { peerId, socket: ws });
 
+          // Send confirmation to receiver
           ws.send(
             JSON.stringify({
               event: SignalingEventType.ROOM_JOINED,
               roomId,
-              payload: { role: 'receiver' },
+              payload: { role: 'receiver', peerId },
               timestamp: Date.now(),
             })
           );
 
+          // Notify sender of new receiver peer
           if (session.senderSocket && session.senderSocket.readyState === WebSocket.OPEN) {
             session.senderSocket.send(
               JSON.stringify({
                 event: SignalingEventType.ROOM_JOINED,
                 roomId,
-                payload: { role: 'sender' },
+                payload: {
+                  role: 'sender',
+                  peerId,
+                  peerCount: session.receiverSockets.size,
+                },
                 timestamp: Date.now(),
               })
             );
           }
 
-          console.log(`[Signaling] Peer Joined Room Code: ${roomCode}`);
+          console.log(`[Signaling] Receiver ${peerId} Joined Room Code: ${roomCode} | Total Peers: ${session.receiverSockets.size}`);
           break;
         }
 
         default: {
-          // Relay SDP / ICE / ECDH Key messages to paired peer
+          // Targeted relay for WebRTC SDP Offers, Answers, and ICE Candidates
           const session = rooms.get(message.roomId);
           if (!session) return;
-          const targetSocket = session.senderSocket === ws ? session.receiverSocket : session.senderSocket;
-          if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
-            targetSocket.send(JSON.stringify(message));
+
+          if (session.senderSocket === ws) {
+            // Sender sending to specific receiver peer
+            const targetPeerId = message.targetPeerId || message.payload?.targetPeerId;
+            if (targetPeerId && session.receiverSockets.has(targetPeerId)) {
+              const targetWs = session.receiverSockets.get(targetPeerId).socket;
+              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(JSON.stringify(message));
+              }
+            } else {
+              // Broadcast to all receivers if no target specified
+              session.receiverSockets.forEach(({ socket }) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                  socket.send(JSON.stringify(message));
+                }
+              });
+            }
+          } else {
+            // Receiver sending to sender
+            if (session.senderSocket && session.senderSocket.readyState === WebSocket.OPEN) {
+              session.senderSocket.send(JSON.stringify(message));
+            }
           }
           break;
         }
@@ -130,22 +163,41 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     console.log('[Signaling] Peer disconnected');
     rooms.forEach((session, roomId) => {
-      if (session.senderSocket === ws || session.receiverSocket === ws) {
-        const otherSocket = session.senderSocket === ws ? session.receiverSocket : session.senderSocket;
-        if (otherSocket && otherSocket.readyState === WebSocket.OPEN) {
-          otherSocket.send(
-            JSON.stringify({
-              event: SignalingEventType.PEER_DISCONNECTED,
-              roomId,
-              timestamp: Date.now(),
-            })
-          );
-        }
+      if (session.senderSocket === ws) {
+        // Sender disconnected — notify all receivers
+        session.receiverSockets.forEach(({ socket }) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(
+              JSON.stringify({
+                event: SignalingEventType.PEER_DISCONNECTED,
+                roomId,
+                timestamp: Date.now(),
+              })
+            );
+          }
+        });
         rooms.delete(roomId);
         codeToRoomId.delete(session.roomCode);
+      } else {
+        // Check if a receiver disconnected
+        session.receiverSockets.forEach(({ socket, peerId }, pId) => {
+          if (socket === ws) {
+            session.receiverSockets.delete(pId);
+            if (session.senderSocket && session.senderSocket.readyState === WebSocket.OPEN) {
+              session.senderSocket.send(
+                JSON.stringify({
+                  event: SignalingEventType.PEER_DISCONNECTED,
+                  roomId,
+                  payload: { peerId: pId, peerCount: session.receiverSockets.size },
+                  timestamp: Date.now(),
+                })
+              );
+            }
+          }
+        });
       }
     });
   });
 });
 
-console.log('🚀 Native WebSocket Signaling Gateway running on ws://localhost:8080/ws');
+console.log('🚀 Native 1-to-Many Multi-Peer WebSocket Signaling Gateway running on ws://localhost:8080/ws');

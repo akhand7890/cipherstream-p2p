@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play, Folder, FolderPlus } from 'lucide-react';
+import { UploadCloud, QrCode, Zap, CheckCircle, Lock, Flame, Files, Sparkles, Pause, Play, Folder, FolderPlus, Users } from 'lucide-react';
 import { QRCodeModal } from './QRCodeModal';
 import { traverseDataTransferItems, normalizeDirectoryFiles } from '../lib/directoryTree';
 
@@ -16,6 +16,7 @@ import { traverseDataTransferItems, normalizeDirectoryFiles } from '../lib/direc
  * @param {() => void} [props.onPause]
  * @param {() => void} [props.onResume]
  * @param {boolean} [props.isTransferring]
+ * @param {number} [props.peerCount]
  */
 export const SenderView = ({
   onFilesSelect,
@@ -27,6 +28,7 @@ export const SenderView = ({
   onPause,
   onResume,
   isTransferring = false,
+  peerCount = 1,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
@@ -80,11 +82,11 @@ export const SenderView = ({
     <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
       <div className="text-center space-y-2">
         <span className="text-xs font-mono uppercase tracking-widest text-indigo-400 font-bold">
-          Direct Peer-to-Peer Transfer
+          Direct Peer-to-Peer Mesh Transfer
         </span>
         <h2 className="text-4xl font-extrabold text-white tracking-tight">Send Files & Folders</h2>
         <p className="text-sm text-slate-400">
-          Select files or an entire folder hierarchy, generate a session code, and stream directly to the receiver.
+          Select files or a folder directory, generate a session code, and broadcast to multiple receivers simultaneously.
         </p>
       </div>
 
@@ -236,49 +238,57 @@ export const SenderView = ({
         </div>
       )}
 
-      {/* Active Transfer Stream Controls */}
+      {/* Active Transfer Stream Controls & Multi-Peer Grid */}
       {roomCode && (
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-purple-500/40 flex items-center justify-between gap-4 animate-in fade-in duration-200">
-          <div>
-            <span className="text-[10px] font-mono text-purple-400 uppercase font-bold block">ACTIVE ROOM CODE</span>
-            <span className="text-xl font-extrabold font-mono text-white tracking-widest">{roomCode}</span>
-          </div>
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-purple-500/40 space-y-3 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-purple-400 uppercase font-bold block">ACTIVE ROOM CODE</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                  <Users className="h-3 w-3 text-emerald-400" />
+                  {peerCount > 1 ? `${peerCount} RECEIVERS MESH` : '1 RECEIVER CONNECTED'}
+                </span>
+              </div>
+              <span className="text-xl font-extrabold font-mono text-white tracking-widest">{roomCode}</span>
+            </div>
 
-          <div className="flex items-center gap-2">
-            {activePaused ? (
+            <div className="flex items-center gap-2">
+              {activePaused ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocalPaused(false);
+                    onResume?.();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-emerald-600/20 animate-pulse"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                  <span>Resume Stream</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocalPaused(true);
+                    onPause?.();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Pause className="h-4 w-4 fill-current" />
+                  <span>Pause Stream</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => {
-                  setLocalPaused(false);
-                  onResume?.();
-                }}
-                className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-emerald-600/20 animate-pulse"
+                onClick={() => setIsQrOpen(true)}
+                className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center cursor-pointer"
+                title="View QR Code"
               >
-                <Play className="h-4 w-4 fill-current" />
-                <span>Resume Stream</span>
+                <QrCode className="h-5 w-5 text-indigo-400" />
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setLocalPaused(true);
-                  onPause?.();
-                }}
-                className="px-4 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <Pause className="h-4 w-4 fill-current" />
-                <span>Pause Stream</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setIsQrOpen(true)}
-              className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center cursor-pointer"
-              title="View QR Code"
-            >
-              <QrCode className="h-5 w-5 text-indigo-400" />
-            </button>
+            </div>
           </div>
         </div>
       )}
