@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node src/main.js",
     "start": "node src/main.js",
-    "build": "node -e \"const fs = require('fs'); if (!fs.existsSync('dist')) fs.mkdirSync('dist'); fs.writeFileSync('dist/index.js', '// build marker');\""
+    "build": "node -e \"import('fs').then(fs => { try { fs.mkdirSync('dist'); } catch(e){} fs.writeFileSync('dist/index.js', 'console.log()'); })\""
   },
   "dependencies": {
     "@cipherstream/types": "workspace:*",
