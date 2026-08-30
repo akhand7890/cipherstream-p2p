@@ -31,6 +31,20 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
   };
 
   /**
+   * @param {React.ClipboardEvent} e
+   */
+  const handlePaste = (e) => {
+    const pastedData = e.clipboardData.getData('text').trim();
+    if (/^\d{6}$/.test(pastedData)) {
+      e.preventDefault();
+      const newDigits = pastedData.split('');
+      setDigits(newDigits);
+      const lastInput = document.getElementById('digit-5');
+      lastInput?.focus();
+    }
+  };
+
+  /**
    * @param {number} index
    * @param {React.KeyboardEvent} e
    */
@@ -55,17 +69,17 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-2 px-2">
         <span className="text-xs font-mono uppercase tracking-widest text-indigo-400 font-bold">
           Connect directly to the sender
         </span>
-        <h2 className="text-4xl font-extrabold text-white tracking-tight">Join Session</h2>
-        <p className="text-sm text-slate-400">
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Join Session</h2>
+        <p className="text-xs sm:text-sm text-slate-400">
           Enter the 6-digit code or custom vanity room alias provided by the sender.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="glass-panel rounded-3xl p-8 border border-slate-800 space-y-6">
+      <form onSubmit={handleSubmit} className="glass-panel rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-800 space-y-6">
         {/* Toggle between 6-Digit Code and Custom Vanity Alias */}
         <div className="flex justify-center gap-4 text-xs font-semibold text-slate-400 border-b border-slate-800/80 pb-4">
           <button
@@ -97,11 +111,12 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
               placeholder="e.g. CIPHER-99"
               value={customCodeInput}
               onChange={(e) => setCustomCodeInput(e.target.value.toUpperCase())}
-              className="w-full py-3.5 px-4 text-center text-xl font-bold font-mono bg-slate-900/90 text-cyan-300 border border-slate-700 rounded-2xl focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 focus:outline-none transition"
+              className="w-full py-3 px-4 text-center text-lg sm:text-xl font-bold font-mono bg-slate-900/90 text-cyan-300 border border-slate-700 rounded-2xl focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 focus:outline-none transition"
             />
           </div>
         ) : (
-          <div className="flex justify-center gap-3">
+          /* Mobile-Responsive 6-Digit Input Grid */
+          <div className="flex justify-center gap-1.5 sm:gap-2.5 md:gap-3 px-1">
             {digits.map((digit, idx) => (
               <input
                 key={idx}
@@ -112,7 +127,8 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
                 value={digit}
                 onChange={(e) => handleDigitChange(idx, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(idx, e)}
-                className="w-14 h-16 text-center text-3xl font-extrabold font-mono bg-slate-900/90 text-indigo-400 border border-slate-700/80 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none transition shadow-inner"
+                onPaste={handlePaste}
+                className="w-10 sm:w-12 md:w-14 h-12 sm:h-14 md:h-16 text-center text-xl sm:text-2xl md:text-3xl font-extrabold font-mono bg-slate-900/90 text-indigo-400 border border-slate-700/80 rounded-xl sm:rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none transition shadow-inner"
               />
             ))}
           </div>
@@ -137,7 +153,7 @@ export const ReceiverView = ({ onJoinSession, isLoading }) => {
         <button
           type="submit"
           disabled={fullCode.length < 4 || isLoading}
-          className="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-base transition shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-3.5 sm:py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-sm sm:text-base transition shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
         >
           {isLoading ? (
             'Securing Peer Connection...'
