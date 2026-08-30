@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node src/main.js",
     "start": "node src/main.js",
-    "build": "node -e \"console.log('Signaling JS build complete')\""
+    "build": "node -e \"import fs from 'fs'; if (!fs.existsSync('dist')) fs.mkdirSync('dist'); fs.writeFileSync('dist/index.js', '// build marker');\""
   },
   "dependencies": {
     "@cipherstream/types": "workspace:*",
