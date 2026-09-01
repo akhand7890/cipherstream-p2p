@@ -43,11 +43,11 @@ export const AuthModal = ({ isOpen, initialTab = 'login', onClose, onSuccess, on
 
   if (!isOpen) return null;
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    const result = loginUser({ email: loginEmail, password: loginPassword });
+    const result = await loginUser({ email: loginEmail, password: loginPassword });
     if (!result.success) {
       setError(result.error || 'Login failed');
       return;
@@ -56,11 +56,11 @@ export const AuthModal = ({ isOpen, initialTab = 'login', onClose, onSuccess, on
     onSuccess(result.user, rememberMe);
   };
 
-  const handleSignupSubmit = (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    const result = registerUser({
+    const result = await registerUser({
       name: `${firstName} ${lastName}`.trim(),
       email: signupEmail,
       password: signupPassword,

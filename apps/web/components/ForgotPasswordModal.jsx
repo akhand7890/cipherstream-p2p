@@ -33,7 +33,20 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const users = getAllUsers();
-    const existingUser = users.find((u) => u.email === cleanEmail);
+    let existingUser = users.find((u) => u.email === cleanEmail);
+
+    if (!existingUser) {
+      try {
+        const checkRes = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', email: cleanEmail, password: '' }),
+        });
+        if (checkRes.status === 401) {
+          existingUser = { email: cleanEmail, name: 'User' };
+        }
+      } catch (err) {}
+    }
 
     if (!existingUser) {
       setIsSending(false);
@@ -96,7 +109,7 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
 
   const fullCode = digits.join('');
 
-  const handleResetSubmit = (e) => {
+  const handleResetSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -115,7 +128,7 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
       return;
     }
 
-    const result = resetPassword(email, newPassword);
+    const result = await resetPassword(email, newPassword);
     if (!result.success) {
       setError(result.error || 'Failed to reset password.');
       return;
@@ -123,7 +136,7 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
 
     setIsSuccess(true);
     setTimeout(() => {
-      onSuccess(result.user);
+      onSuccess(result.user || { email, name: 'User', emailVerified: true });
     }, 1200);
   };
 
